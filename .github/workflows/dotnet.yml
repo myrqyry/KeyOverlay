@@ -35,7 +35,7 @@ jobs:
       run: dotnet build --configuration Debug -o build
 
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: KeyOverlay-${{ matrix.os }}
         path: build
