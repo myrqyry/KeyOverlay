@@ -245,29 +245,195 @@ namespace KeyOverlayEnhanced
     }
 
 
+    // Simple Dropdown/Selector for Skins
+    public class SkinSelectorControl : Control
+    {
+        private Text label;
+        private RectangleShape mainBox;
+        private Text selectedSkinText;
+        private List<string> skinNames;
+        private int selectedIndex = 0;
+        private bool isOpen = false;
+        private List<ButtonControl> itemButtons = new List<ButtonControl>();
+        private Font font;
+        private Action<string> onSkinSelected;
+        private SkinManager skinManager; // To get available skins
+        private Vector2f position;
+        private Vector2f size;
+
+        public SkinSelectorControl(string text, Vector2f pos, Vector2f sz, Font fnt, SkinManager sm, Action<string> onSelected)
+        {
+            label = new Text(text, fnt, 16) { Position = pos, FillColor = Color.White };
+            position = new Vector2f(pos.X, pos.Y + 20); // Position box below label
+            size = sz;
+            font = fnt;
+            skinManager = sm;
+            this.onSkinSelected = onSelected;
+
+            mainBox = new RectangleShape(size)
+            {
+                Position = position,
+                FillColor = new Color(70, 70, 70),
+                OutlineColor = Color.White,
+                OutlineThickness = 1
+            };
+
+            selectedSkinText = new Text("", font, 16) { FillColor = Color.White };
+            selectedSkinText.Position = new Vector2f(position.X + 5, position.Y + (size.Y - selectedSkinText.GetGlobalBounds().Height) / 2 - 5);
+
+            Bounds = new FloatRect(position, size); // Initial bounds for the main box
+
+            RefreshSkinList();
+            UpdateSelectedText();
+        }
+
+        public void RefreshSkinList()
+        {
+            skinNames = skinManager.AvailableSkinNames.ToList(); // Get a copy
+            if (!skinNames.Any()) skinNames.Add("Default (Built-in)");
+
+            selectedIndex = skinNames.IndexOf(skinManager.CurrentSkinDirectoryName);
+            if (selectedIndex < 0) selectedIndex = 0;
+
+            UpdateItemButtons();
+            UpdateSelectedText();
+        }
+
+        private void UpdateItemButtons()
+        {
+            itemButtons.Clear();
+            if (isOpen)
+            {
+                for (int i = 0; i < skinNames.Count; i++)
+                {
+                    var skinName = skinNames[i];
+                    var buttonPos = new Vector2f(position.X, position.Y + size.Y + i * (size.Y + 2));
+                    var button = new ButtonControl(skinName, buttonPos, size, font, () => SelectSkin(skinName));
+                    itemButtons.Add(button);
+                }
+                 // Update overall bounds if dropdown is open
+                if (itemButtons.Any())
+                {
+                    var lastButton = itemButtons.Last();
+                    Bounds = new FloatRect(position.X, position.Y, size.X, lastButton.Bounds.Top + lastButton.Bounds.Height - position.Y);
+                }
+                else
+                {
+                     Bounds = new FloatRect(position, size);
+                }
+            }
+            else
+            {
+                 Bounds = new FloatRect(position, size); // Reset to main box bounds
+            }
+        }
+
+        private void SelectSkin(string skinName)
+        {
+            selectedIndex = skinNames.IndexOf(skinName);
+            onSkinSelected?.Invoke(skinName);
+            isOpen = false; // Close dropdown after selection
+            UpdateSelectedText();
+            UpdateItemButtons(); // Rebuild buttons (effectively removes them)
+        }
+
+        private void UpdateSelectedText()
+        {
+            if (skinNames.Any() && selectedIndex >= 0 && selectedIndex < skinNames.Count)
+            {
+                selectedSkinText.DisplayedString = skinNames[selectedIndex];
+            }
+            else if (skinNames.Any())
+            {
+                 selectedSkinText.DisplayedString = skinNames[0]; // Fallback
+            }
+            else
+            {
+                selectedSkinText.DisplayedString = "No Skins";
+            }
+            selectedSkinText.Position = new Vector2f(position.X + 5, position.Y + (size.Y - selectedSkinText.GetGlobalBounds().Height) / 2 - selectedSkinText.GetLocalBounds().Top);
+        }
+
+        public void SetSelectedSkin(string skinDirectoryName)
+        {
+            int newIndex = skinNames.IndexOf(skinDirectoryName);
+            if (newIndex != -1)
+            {
+                selectedIndex = newIndex;
+                UpdateSelectedText();
+            }
+        }
+
+        public override void Draw(RenderWindow window)
+        {
+            window.Draw(label);
+            window.Draw(mainBox);
+            window.Draw(selectedSkinText);
+            if (isOpen)
+            {
+                foreach (var btn in itemButtons)
+                {
+                    btn.Draw(window);
+                }
+            }
+        }
+
+        public override void HandleEvent(Event e, Vector2f mousePos)
+        {
+            if (e.Type == EventType.MouseButtonPressed && e.MouseButton.Button == Mouse.Button.Left)
+            {
+                if (mainBox.GetGlobalBounds().Contains(mousePos.X, mousePos.Y))
+                {
+                    isOpen = !isOpen;
+                    UpdateItemButtons(); // Rebuild buttons based on new state
+                }
+                else if (isOpen)
+                {
+                    bool clickedOnItem = false;
+                    foreach (var btn in itemButtons)
+                    {
+                        if (btn.IsMouseOver(mousePos))
+                        {
+                            btn.HandleEvent(e, mousePos); // This will trigger SelectSkin via its action
+                            clickedOnItem = true;
+                            break;
+                        }
+                    }
+                    if (!clickedOnItem) // Clicked outside the dropdown items
+                    {
+                        isOpen = false;
+                        UpdateItemButtons();
+                    }
+                }
+            }
+        }
+    }
+
+
     public class SettingsPanel
     {
         private Profile profile;
+        private SkinManager skinManager;
+        private Action<SkinProfile> applySkinCallback;
         private Font font;
         private Vector2f panelPosition;
         private Vector2f panelSize;
         private RectangleShape background;
         private List<Control> controls = new List<Control>();
         private bool visible = false;
-        private bool isDirty = false;
+        private bool isDirty = false; // For general profile settings, not skin changes
         private ButtonControl saveButton;
-        private ButtonControl loadButton;
+        // private ButtonControl loadButton; // Loading profile reloads everything, including skin
         private Text dirtyIndicator;
+        private SkinSelectorControl skinSelector;
 
 
-        // These were in the original snippet, but their direct use seems replaced by specific controls
-        // private Action<bool> audioToggle;
-        // private Func<bool> audioGetter;
-
-        public SettingsPanel(Font font, Vector2f windowSize, Profile profile)
+        public SettingsPanel(Font initialFont, Vector2f windowSize, Profile prof, SkinManager sm, Action<SkinProfile> onApplySkin)
         {
-            this.font = font;
-            this.profile = profile;
+            this.font = initialFont; // May be updated by skin changes
+            this.profile = prof;
+            this.skinManager = sm;
+            this.applySkinCallback = onApplySkin;
 
             panelSize = new Vector2f(windowSize.X * 0.8f, windowSize.Y * 0.9f);
             panelPosition = new Vector2f((windowSize.X - panelSize.X) / 2, (windowSize.Y - panelSize.Y) / 2);
@@ -275,6 +441,7 @@ namespace KeyOverlayEnhanced
             background = new RectangleShape(panelSize)
             {
                 Position = panelPosition,
+                // Background color could be part of the settings panel's own skin in the future
                 FillColor = new Color(30, 30, 30, 220),
                 OutlineColor = Color.White,
                 OutlineThickness = 2
@@ -282,10 +449,35 @@ namespace KeyOverlayEnhanced
 
             dirtyIndicator = new Text("*", font, 20) { FillColor = Color.Red };
 
-            BuildControls();
-            LoadProfileToUI();
-            UpdateSaveLabel(); // Initial state
+            BuildControls(); // Builds general profile controls
+            LoadProfileToUI(); // Loads general profile settings into controls
+            UpdateSaveLabel();
         }
+
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.font = newFont;
+            // Potentially update colors/styles of the panel itself if it were skinnable
+            // For now, just rebuild controls if font changed significantly, or update font for text elements
+            // Re-create text elements or update their font
+            dirtyIndicator.Font = newFont;
+            // Controls themselves would need an UpdateFont method or be recreated
+            // For simplicity, we might need to rebuild controls if font changes.
+            // However, many controls get font passed at creation and might not update automatically.
+            // This is a complex part of UI skinning.
+
+            // If the skin selector is present, tell it to update its list and current selection display
+            skinSelector?.RefreshSkinList();
+            skinSelector?.SetSelectedSkin(skinManager.CurrentSkinDirectoryName);
+
+
+            // Re-color background based on skin? For now, it's fixed.
+            // background.FillColor = newSkin.SomePanelBackgroundColor;
+            Console.WriteLine($"SettingsPanel skin updated. Font: {newFont}");
+            BuildControls(); // Rebuild to ensure new font is used by controls.
+            LoadProfileToUI(); // And reload values.
+        }
+
 
         public bool IsVisible => visible;
         public void ToggleVisibility() => visible = !visible;
@@ -327,12 +519,35 @@ namespace KeyOverlayEnhanced
         {
             controls.Clear();
             float col1X = 0.05f;
-            float col2X = 0.50f; // Adjusted for potentially wider sliders
+            float col2X = 0.50f;
             float currentY = 0.05f;
-            float spacingY = 0.07f; // Increased spacing for sliders
+            float spacingY = 0.06f; // Slightly reduced for more controls
+            float controlHeight = 30f; // Approximate height for positioning skin selector
 
-            // Basic Settings
-            CreateToggle("Fading", col1X, currentY, () => { profile.Fading = !profile.Fading; MarkDirty(); }, () => profile.Fading);
+            // Skin Selector - Placed at the top
+            skinSelector = new SkinSelectorControl(
+                "Current Skin:",
+                GetRelativePos(col1X, currentY),
+                new Vector2f(panelSize.X * 0.85f, controlHeight), // Make it wider
+                font,
+                skinManager,
+                (selectedSkinDirName) => {
+                    if (skinManager.LoadSkin(selectedSkinDirName))
+                    {
+                        profile.CurrentSkinDirectoryName = selectedSkinDirName; // Update profile
+                        applySkinCallback?.Invoke(skinManager.CurrentSkin);
+                        // No MarkDirty() here as skin changes are applied immediately and saved via CurrentSkinDirectoryName
+                        // Rebuild controls might be needed if panel's own appearance depended on skin.
+                        // For now, AppWindow.ApplySkin handles necessary updates.
+                        Console.WriteLine($"SettingsPanel: Skin selected '{selectedSkinDirName}'");
+                    }
+                }
+            );
+            controls.Add(skinSelector);
+            currentY += spacingY * 1.5f; // Extra space after skin selector
+
+            // Basic Profile Settings (these are general, not skin-specific)
+            CreateToggle("Fading (Profile)", col1X, currentY, () => { profile.Fading = !profile.Fading; MarkDirty(); }, () => profile.Fading);
             CreateToggle("Counter", col2X, currentY, () => { profile.Counter = !profile.Counter; MarkDirty(); }, () => profile.Counter);
             currentY += spacingY;
 
@@ -383,14 +598,19 @@ namespace KeyOverlayEnhanced
             CreatePlaceHolder("Tap Shape", col2X, currentY, () => profile.TapShape, s => { if(s is string) profile.TapShape = (string)s; MarkDirty(); });
             currentY += spacingY * 1.5f; // Extra space before buttons
 
-            // Save/Load
-            saveButton = CreateButton("Save", col1X, currentY, () => { profile.Save("profile.json"); isDirty = false; UpdateSaveLabel(); });
-            loadButton = CreateButton("Load", col2X, currentY, () => {
-                profile = Profile.Load("profile.json");
-                LoadProfileToUI();
+            // Save Button for general profile settings
+            saveButton = CreateButton("Save Profile Settings", col1X, currentY, () => {
+                profile.Save("profile.json");
                 isDirty = false;
                 UpdateSaveLabel();
+                Console.WriteLine("Profile settings saved.");
             });
+            // The Load button functionality is implicitly handled:
+            // 1. On app start, AppWindow loads profile.json, which includes the CurrentSkinDirectoryName.
+            // 2. SkinManager initializes with this CurrentSkinDirectoryName.
+            // 3. If a skin is changed via SkinSelector, that change is live and CurrentSkinDirectoryName is updated in 'profile' instance.
+            // 4. Saving 'profile' then persists this chosen skin.
+            // A manual "Load Profile" button here would need to coordinate with AppWindow to re-initialize many things.
         }
 
         private void CreateToggle(string label, float xPercent, float yPercent, Action onToggle, Func<bool> getter)

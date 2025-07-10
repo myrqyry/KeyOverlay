@@ -11,14 +11,15 @@ namespace KeyOverlayEnhanced
         private float maxLifetime = 0.2f; // Short duration for a glitch
         private static Random random = new Random();
 
-        public GlitchBar(uint windowWidth, float yPosition, Profile profile) // Added profile
+        // Constructor now takes SkinProfile for color
+        public GlitchBar(uint windowWidth, float yPosition, Profile generalProfile, SkinProfile skinProfile)
         {
             lifetime = new Clock();
             float height = (float)(random.NextDouble() * 15 + 5); // Random height
             Bar = new RectangleShape(new Vector2f(windowWidth, height))
             {
                 Position = new Vector2f(0, yPosition - height / 2),
-                FillColor = profile.GlitchColor // Use profile color instead of random
+                FillColor = skinProfile.GlitchColor.SfmlColor // Use GlitchColor from SkinProfile
             };
         }
 
@@ -44,9 +45,11 @@ namespace KeyOverlayEnhanced
         // private int pixelSize; // Stored in constructor, not needed as a field if not used elsewhere
         // private RenderWindow sourceWindow; // Used in constructor, not needed as a field
 
-        public PixelationEffect(RenderWindow window, int pSize, Profile profile) // Added profile
+        // Constructor now takes SkinProfile, though not directly used for styling yet
+        public PixelationEffect(RenderWindow window, int pSize, Profile generalProfile, SkinProfile skinProfile)
         {
             // this.sourceWindow = window; // Not stored if only used here
+            // skinProfile is available if needed for future visual changes to pixelation effect
             int currentPixelSize = Math.Max(1, pSize); // Ensure pixelSize is at least 1
             lifetime = new Clock();
 

@@ -15,59 +15,107 @@ namespace KeyOverlay
         private CustomUI _customUI;
         private AudioAnalyzer _audioAnalyzer;
         private Font _appFont;
+        private SkinManager _skinManager;
         private object _lock = new object();
 
         public AppWindow()
         {
             Console.WriteLine("Starting AppWindow initialization...");
             
-            // Load profile first as it dictates window settings
             _profile = Profile.Load("profile.json");
             Console.WriteLine("Profile loaded successfully");
 
-            // Use a default font, ensure "Resources/consolab.ttf" exists or handle error
+            _skinManager = new SkinManager(_profile.CurrentSkinDirectoryName);
+            Console.WriteLine($"SkinManager initialized. Current skin: {_skinManager.CurrentSkin.SkinName}");
+
+            LoadFontFromSkin(); // Load font based on current skin
+
+            _window = new RenderWindow(new VideoMode(800, 600), "Key Overlay Enhanced", Styles.Default);
+            _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS)); // FPS from general profile
+            Console.WriteLine("Window created successfully");
+
+            _audioAnalyzer = new AudioAnalyzer();
+            Console.WriteLine("AudioAnalyzer created successfully");
+
+            // Pass SkinManager's CurrentSkin to CustomUI and SettingsPanel
+            _customUI = new CustomUI(_profile, _skinManager.CurrentSkin, _window, _audioAnalyzer, _appFont);
+            Console.WriteLine("CustomUI created successfully");
+            
+            _settingsPanel = new SettingsPanel(_appFont, new Vector2f(_window.Size.X, _window.Size.Y), _profile, _skinManager, ApplySkin);
+            Console.WriteLine("SettingsPanel created successfully");
+
+            ApplySkin(_skinManager.CurrentSkin); // Apply initial skin settings (like background color)
+            Console.WriteLine("Initial skin applied to window graphics.");
+        }
+
+        private void LoadFontFromSkin()
+        {
             try
             {
-                _appFont = new Font(_profile.FontPath);
-                Console.WriteLine("Font loaded successfully");
+                // Dispose existing font if any before loading a new one
+                _appFont?.Dispose();
+                _appFont = new Font(_skinManager.CurrentSkin.FontFileName);
+                Console.WriteLine($"Font '{_skinManager.CurrentSkin.FontFileName}' loaded successfully from skin '{_skinManager.CurrentSkin.SkinName}'.");
             }
             catch (SFML.LoadingFailedException ex)
             {
-                Console.WriteLine($"Failed to load font: {ex.Message}. Using fallback or exiting.");
-                // Handle fallback: try a system font or exit. For now, let it throw if critical.
-                // For simplicity, we'll assume font exists. A real app needs robust error handling.
-                throw;
+                string fallbackFontPath = new SkinProfile().FontFileName; // Get default font from a new SkinProfile instance
+                Console.WriteLine($"Failed to load font from skin: '{_skinManager.CurrentSkin.FontFileName}'. Error: {ex.Message}. Trying fallback default font '{fallbackFontPath}'.");
+                try
+                {
+                    _appFont = new Font(fallbackFontPath);
+                    Console.WriteLine($"Fallback font '{fallbackFontPath}' loaded successfully.");
+                }
+                catch (SFML.LoadingFailedException exFallback)
+                {
+                    Console.WriteLine($"CRITICAL: Failed to load fallback font: '{fallbackFontPath}'. Error: {exFallback.Message}. Application might not render text correctly.");
+                    // Consider throwing here or using a built-in SFML font if possible, though SFML.Net doesn't ship one.
+                    // For now, we'll proceed without a font, which will likely cause issues.
+                    _appFont = null; // Signifies no font available
+                }
             }
-
-            // Initial window size can be from profile or a default
-            _window = new RenderWindow(new VideoMode(800, 600), "Key Overlay Enhanced", Styles.Default);
-            Console.WriteLine("Window created successfully");
-
-            _audioAnalyzer = new AudioAnalyzer(); // Initialize audio analyzer
-            Console.WriteLine("AudioAnalyzer created successfully");
-
-            // Initialize UI components AFTER _window and _appFont are ready
-            _customUI = new CustomUI(_profile, _window, _audioAnalyzer, _appFont);
-            Console.WriteLine("CustomUI created successfully");
-            
-            _settingsPanel = new SettingsPanel(_appFont, new Vector2f(_window.Size.X, _window.Size.Y), _profile);
-            Console.WriteLine("SettingsPanel created successfully");
-
-            InitializeGraphics(); // New method to setup graphics based on profile
-            Console.WriteLine("Graphics initialized successfully");
         }
 
-        public void InitializeGraphics() // Was Initialize()
+        public void ApplySkin(SkinProfile newSkin)
         {
-            lock (_lock) // Keep lock if there's any chance of concurrent access on init
+            lock (_lock)
             {
-                // Ensure FPS is positive before casting to uint
-                _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS));
+                _skinManager.CurrentSkin = newSkin; // Ensure SkinManager is also updated if called externally
+                _profile.CurrentSkinDirectoryName = _skinManager.CurrentSkinDirectoryName; // Persist choice
 
-                // Initial layout calculation for CustomUI if needed
+                LoadFontFromSkin(); // Reload font in case it changed
+
+                // Update window properties
+                // Background color is handled in the main loop's Clear call.
+
+                // Update UI components
+                if (_appFont != null) // Only update components if font is available
+                {
+                    _customUI.UpdateSkin(_skinManager.CurrentSkin, _appFont);
+                    _settingsPanel.UpdateSkin(_skinManager.CurrentSkin, _appFont); // Settings panel might also want skin updates
+                }
+                else
+                {
+                    Console.WriteLine("Cannot apply skin to UI components: AppFont is null.");
+                }
+
+                // Recalculate layout for CustomUI as key sizes/margins might change with skin (though not yet implemented in SkinProfile)
                 _customUI.RecalculateLayout();
+
+                Console.WriteLine($"Applied skin: {newSkin.SkinName}");
             }
         }
+
+
+        // Graphics initialization is now part of ApplySkin or specific component updates
+        // public void InitializeGraphics() // Was Initialize()
+        // {
+        //     lock (_lock)
+        //     {
+        //         _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS));
+        //         _customUI.RecalculateLayout();
+        //     }
+        // }
 
         private void OnClose(object sender, EventArgs e)
         {
@@ -155,7 +203,8 @@ namespace KeyOverlay
                 _customUI.Update();
 
                 // Drawing
-                _window.Clear(_profile.BackgroundColor);
+                // Use background color from the currently loaded skin
+                _window.Clear(_skinManager.CurrentSkin.BackgroundColor.SfmlColor);
 
                 _customUI.Render(_window);
 
