@@ -1,3 +1,4 @@
+#nullable enable
 using System.Text.Json.Serialization;
 
 namespace KeyOverlayEnhanced
@@ -25,6 +26,7 @@ namespace KeyOverlayEnhanced
         public ColorDefinition KeyOutlineColor { get; set; } = new ColorDefinition(255, 255, 255, 255); // Default White Outline
         public ColorDefinition KeyLabelColor { get; set; } = new ColorDefinition(255, 255, 255, 255); // Default White Label
         public ColorDefinition CounterColor { get; set; } = new ColorDefinition(0, 255, 255, 255); // Default Cyan Counter
+        public ColorDefinition GlitchColor { get; set; } = new ColorDefinition(255, 0, 0, 150); // Default Red Glitch Color
 
         // Tap Effect Specifics
         public ColorDefinition TapEffectColor { get; set; } = new ColorDefinition(255, 255, 255, 255); // Default White Tap Effect
@@ -43,6 +45,7 @@ namespace KeyOverlayEnhanced
             KeyOutlineColor ??= new ColorDefinition(255, 255, 255, 255);
             KeyLabelColor ??= new ColorDefinition(255, 255, 255, 255);
             CounterColor ??= new ColorDefinition(0, 255, 255, 255);
+            GlitchColor ??= new ColorDefinition(255, 0, 0, 150);
             TapEffectColor ??= new ColorDefinition(255, 255, 255, 255);
         }
     }
