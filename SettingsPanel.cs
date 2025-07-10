@@ -346,11 +346,13 @@ namespace KeyOverlayEnhanced
 
             CreateSlider("FPS", col1X, currentY, 15, 240, () => profile.FPS, v => { profile.FPS = v; MarkDirty(); });
             // Placeholder for ColorPicker
-            CreatePlaceHolder("BG Color", col2X, currentY, () => profile.BackgroundColor, c => { profile.BackgroundColor = c; MarkDirty(); });
+            // The setter lambda 'c => { ... }' takes an object 'c'. It needs to be cast if assigned to a strongly-typed property.
+            CreatePlaceHolder("BG Color", col2X, currentY, () => profile.BackgroundColor, c => { if(c is SFML.Graphics.Color) profile.BackgroundColor = (SFML.Graphics.Color)c; MarkDirty(); });
             currentY += spacingY;
 
             // Placeholder for ShapePicker
-            CreatePlaceHolder("Tap Shape", col1X, currentY, () => profile.TapShape, s => { profile.TapShape = s; MarkDirty(); });
+            // The setter lambda 's => { ... }' takes an object 's'. It needs to be cast.
+            CreatePlaceHolder("Tap Shape", col1X, currentY, () => profile.TapShape, s => { if(s is string) profile.TapShape = (string)s; MarkDirty(); });
             CreateToggle("Audio Reactive", col2X, currentY, () => { profile.AudioReactive = !profile.AudioReactive; MarkDirty(); }, () => profile.AudioReactive);
             currentY += spacingY;
 

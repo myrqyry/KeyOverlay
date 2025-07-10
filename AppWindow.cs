@@ -79,7 +79,8 @@ namespace KeyOverlay // Original namespace
         {
             lock (_lock) // Keep lock if there's any chance of concurrent access on init
             {
-                _window.SetFramerateLimit(_profile.FPS);
+                // Ensure FPS is positive before casting to uint
+                _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS));
 
                 // Fading effect setup (simplified, may need rework with CustomUI)
                 if (_profile.Fading)
@@ -154,47 +155,64 @@ namespace KeyOverlay // Original namespace
             if(_profile.Fading) SetupFadingEffect(); // Recreate fading effect for new size
         }
 
+        private void OnMouseButtonPressed(object sender, MouseButtonEventArgs e)
+        {
+            if (_settingsPanel.IsVisible)
+            {
+                Event eventToPass = new Event
+                {
+                    Type = EventType.MouseButtonPressed,
+                    MouseButton = new MouseButtonEvent { Button = e.Button, X = e.X, Y = e.Y }
+                };
+                _settingsPanel.HandleEvent(eventToPass, _window);
+            }
+            // Other potential game logic for mouse press if not consumed by panel
+        }
+
+        private void OnMouseButtonReleased(object sender, MouseButtonEventArgs e)
+        {
+            if (_settingsPanel.IsVisible)
+            {
+                Event eventToPass = new Event
+                {
+                    Type = EventType.MouseButtonReleased,
+                    MouseButton = new MouseButtonEvent { Button = e.Button, X = e.X, Y = e.Y }
+                };
+                _settingsPanel.HandleEvent(eventToPass, _window);
+            }
+            // Other potential game logic for mouse release
+        }
+
+        private void OnMouseMoved(object sender, MouseMoveEventArgs e)
+        {
+            if (_settingsPanel.IsVisible)
+            {
+                Event eventToPass = new Event
+                {
+                    Type = EventType.MouseMoved,
+                    MouseMove = new MouseMoveEvent { X = e.X, Y = e.Y }
+                };
+                _settingsPanel.HandleEvent(eventToPass, _window);
+            }
+            // Other potential game logic for mouse move
+        }
 
         public void Run()
         {
             _window.Closed += OnClose;
             _window.KeyPressed += OnKeyPressed;
-            _window.Resized += OnResized; // Handle window resizing
+            _window.Resized += OnResized;
+            _window.MouseButtonPressed += OnMouseButtonPressed;
+            _window.MouseButtonReleased += OnMouseButtonReleased;
+            _window.MouseMoved += OnMouseMoved;
+            // _window.MouseWheelScrolled += OnMouseWheelScrolled; // If settings panel needs it
 
-            _window.SetFramerateLimit(_profile.FPS); // Set initial framerate from profile
+            // Ensure FPS is positive before casting to uint
+            _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS)); // Set initial framerate from profile
 
             while (_window.IsOpen)
             {
-                // Event processing loop
-                Event e;
-                while (_window.PollEvent(out e)) // Changed from DispatchEvents to PollEvent for explicit handling
-                {
-                    // Pass event to settings panel first if it's visible
-                    if (_settingsPanel.IsVisible)
-                    {
-                        _settingsPanel.HandleEvent(e, _window);
-                        // If settings panel consumes the event (e.g., a click inside it),
-                        // we might not want CustomUI or AppWindow to process it further.
-                        // For now, we'll let both process, but this could be refined.
-                    }
-
-                    // Global event handling
-                    switch (e.Type)
-                    {
-                        case EventType.Closed:
-                            OnClose(this, EventArgs.Empty);
-                            break;
-                        case EventType.KeyPressed:
-                            OnKeyPressed(this, e.Key);
-                            // If settings panel is not visible or didn't handle F1, AppWindow can.
-                            // Note: OnKeyPressed in AppWindow already handles F1 for panel toggle.
-                            break;
-                        case EventType.Resized:
-                            OnResized(this, e.Size);
-                            break;
-                        // Add other event types as needed (MouseButtonPressed, MouseMoved for CustomUI if not handled internally)
-                    }
-                }
+                _window.DispatchEvents(); // Process all subscribed events
 
                 // Update game logic
                 _customUI.Update();
