@@ -112,49 +112,78 @@ namespace KeyOverlayEnhanced
         public int PressCount { get; private set; }
         private SkinProfile skin; // Keep a reference to apply styles
 
+        // Animation state properties
+        private bool isAnimatingPress = false;
+        private bool isAnimatingRelease = false;
+        private Clock animationClock = new Clock(); // For timing animations
+
+        // These will be configurable later via SkinProfile, using defaults for now
+        private float currentConfiguredAnimationDurationPress = 0.15f;
+        private float currentConfiguredAnimationDurationRelease = 0.25f;
+        private float currentConfiguredTargetScalePress = 1.15f;
+        // private string currentEasingFunctionType = "EaseOutCubic"; // Obsolete: now using skin.KeyEasingFunctionPress/Release
+
+        private float currentScale = 1.0f;
+        private float animationStartScale = 1.0f; // Stores the scale at the beginning of an animation
+        private Vector2f keyOriginalTopLeftPosition; // Store the initial top-left position for label calculation
+
+
         // For standard keys
-        public KeyDefinition(Keyboard.Key key, Vector2f position, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
+        public KeyDefinition(Keyboard.Key key, Vector2f topLeftPosition, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
         {
             SfmlKey = key;
             IsMouseKey = false;
             this.skin = skinProfile;
+            this.keyOriginalTopLeftPosition = topLeftPosition;
 
             currentDefaultColor = skin.KeyDefaultColor.SfmlColor;
             currentPressedColor = skin.KeyPressedColor.SfmlColor;
 
             VisualKeyShape = new RectangleShape(size) {
-                Position = position,
+                Origin = new Vector2f(size.X / 2f, size.Y / 2f),
+                Position = new Vector2f(topLeftPosition.X + size.X / 2f, topLeftPosition.Y + size.Y / 2f),
                 FillColor = currentDefaultColor,
                 OutlineColor = skin.KeyOutlineColor.SfmlColor,
-                OutlineThickness = generalProfile.OutlineThickness // Outline thickness from general profile
+                OutlineThickness = generalProfile.OutlineThickness
             };
             KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = skin.KeyLabelColor.SfmlColor };
-            KeyLabel.Position = new Vector2f(
-                position.X + (size.X - KeyLabel.GetGlobalBounds().Width) / 2,
-                position.Y + (size.Y - KeyLabel.GetGlobalBounds().Height) / 2 - KeyLabel.GetLocalBounds().Top /2 // Center label
-            );
+            UpdateLabelPosition();
         }
 
         // For mouse buttons
-        public KeyDefinition(Mouse.Button button, Vector2f position, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
+        public KeyDefinition(Mouse.Button button, Vector2f topLeftPosition, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
         {
             MouseButton = button;
             IsMouseKey = true;
             this.skin = skinProfile;
+            this.keyOriginalTopLeftPosition = topLeftPosition;
 
             currentDefaultColor = skin.KeyDefaultColor.SfmlColor;
             currentPressedColor = skin.KeyPressedColor.SfmlColor;
 
             VisualKeyShape = new RectangleShape(size) {
-                Position = position,
+                Origin = new Vector2f(size.X / 2f, size.Y / 2f),
+                Position = new Vector2f(topLeftPosition.X + size.X / 2f, topLeftPosition.Y + size.Y / 2f),
                 FillColor = currentDefaultColor,
                 OutlineColor = skin.KeyOutlineColor.SfmlColor,
-                OutlineThickness = generalProfile.OutlineThickness // Outline thickness from general profile
+                OutlineThickness = generalProfile.OutlineThickness
             };
             KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = skin.KeyLabelColor.SfmlColor };
+            UpdateLabelPosition();
+        }
+
+        private void UpdateLabelPosition()
+        {
+            // Recalculate apparent top-left based on original top-left, size, and current scale.
+            // This is simpler than using GetGlobalBounds() if the parent doesn't transform.
+            float visualWidth = VisualKeyShape.Size.X * currentScale;
+            float visualHeight = VisualKeyShape.Size.Y * currentScale;
+            float apparentTopLeftX = keyOriginalTopLeftPosition.X + (VisualKeyShape.Size.X - visualWidth) / 2f;
+            float apparentTopLeftY = keyOriginalTopLeftPosition.Y + (VisualKeyShape.Size.Y - visualHeight) / 2f;
+
             KeyLabel.Position = new Vector2f(
-                position.X + (size.X - KeyLabel.GetGlobalBounds().Width) / 2,
-                position.Y + (size.Y - KeyLabel.GetGlobalBounds().Height) / 2 - KeyLabel.GetLocalBounds().Top /2 // Center label
+                apparentTopLeftX + (visualWidth - KeyLabel.GetGlobalBounds().Width) / 2f,
+                apparentTopLeftY + (visualHeight - KeyLabel.GetGlobalBounds().Height) / 2f - KeyLabel.GetLocalBounds().Top
             );
         }
 
@@ -165,37 +194,108 @@ namespace KeyOverlayEnhanced
             currentPressedColor = skin.KeyPressedColor.SfmlColor;
 
             VisualKeyShape.OutlineColor = skin.KeyOutlineColor.SfmlColor;
-            VisualKeyShape.OutlineThickness = generalProfile.OutlineThickness; // Update if this can change too
+            VisualKeyShape.OutlineThickness = generalProfile.OutlineThickness;
 
             KeyLabel.Font = newFont;
             KeyLabel.FillColor = skin.KeyLabelColor.SfmlColor;
-            // Recalculate label position if size or font changed significantly
-            KeyLabel.Position = new Vector2f(
-                VisualKeyShape.Position.X + (VisualKeyShape.Size.X - KeyLabel.GetGlobalBounds().Width) / 2,
-                VisualKeyShape.Position.Y + (VisualKeyShape.Size.Y - KeyLabel.GetGlobalBounds().Height) / 2 - KeyLabel.GetLocalBounds().Top /2
-            );
+            // VisualKeyShape.Position needs to be reset to its centered position if not already
+            VisualKeyShape.Position = new Vector2f(keyOriginalTopLeftPosition.X + VisualKeyShape.Size.X / 2f, keyOriginalTopLeftPosition.Y + VisualKeyShape.Size.Y / 2f);
+            VisualKeyShape.Origin = new Vector2f(VisualKeyShape.Size.X / 2f, VisualKeyShape.Size.Y / 2f);
+            UpdateLabelPosition(); // Recalculate label based on new font/skin
 
-            // Update fill color based on current state
             VisualKeyShape.FillColor = IsPressed ? currentPressedColor : currentDefaultColor;
+
+            // Update animation parameters from the new skin
+            this.currentConfiguredAnimationDurationPress = newSkin.KeyAnimationDurationPress;
+            this.currentConfiguredAnimationDurationRelease = newSkin.KeyAnimationDurationRelease;
+            this.currentConfiguredTargetScalePress = newSkin.KeyTargetScalePress;
+            // currentEasingFunctionType is now split into press and release, will be used directly from skin property.
+        }
+
+        private void UpdateAnimation()
+        {
+            if (!skin.KeyEnableAnimation) // Check if animation is enabled for the current skin
+            {
+                currentScale = IsPressed ? currentConfiguredTargetScalePress : 1.0f;
+                VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+                UpdateLabelPosition();
+                isAnimatingPress = false; // Ensure animation flags are false
+                isAnimatingRelease = false;
+                return;
+            }
+
+            float elapsed = animationClock.ElapsedTime.AsSeconds();
+            float t = 0f;
+
+            if (isAnimatingPress)
+            {
+                t = Math.Min(1f, elapsed / currentConfiguredAnimationDurationPress);
+                float easedT = EasingFunctions.ApplyEasing(skin.KeyEasingFunctionPress, t); // Use press easing func
+                currentScale = animationStartScale + (currentConfiguredTargetScalePress - animationStartScale) * easedT;
+
+                if (t >= 1f)
+                {
+                    isAnimatingPress = false;
+                    currentScale = currentConfiguredTargetScalePress;
+                }
+            }
+            else if (isAnimatingRelease)
+            {
+                t = Math.Min(1f, elapsed / currentConfiguredAnimationDurationRelease);
+                float easedT = EasingFunctions.ApplyEasing(skin.KeyEasingFunctionRelease, t); // Use release easing func
+                currentScale = animationStartScale + (1.0f - animationStartScale) * easedT;
+
+                if (t >= 1f)
+                {
+                    isAnimatingRelease = false;
+                    currentScale = 1.0f; // Snap to final scale
+                }
+            }
+            // Origin is already set to center in constructor. Position is also set to center.
+            // Only scale needs to be applied here.
+            VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            UpdateLabelPosition(); // Update label position based on new scale
         }
 
 
         public void UpdateState(bool justPressed)
         {
-            bool currentlyPressed = IsMouseKey ? Mouse.IsButtonPressed(MouseButton) : Keyboard.IsKeyPressed(SfmlKey);
-            if (currentlyPressed)
+            bool previouslyPressed = IsPressed;
+            IsPressed = IsMouseKey ? Mouse.IsButtonPressed(MouseButton) : Keyboard.IsKeyPressed(SfmlKey);
+
+            UpdateAnimation(); // Handle ongoing or finishing animations
+
+            if (IsPressed && !previouslyPressed) // Key down event
             {
                 VisualKeyShape.FillColor = currentPressedColor;
-                if (justPressed && !IsPressed)
-                {
-                    PressCount++;
-                }
+                PressCount++;
+
+                animationStartScale = currentScale; // Capture current scale for animation base
+                isAnimatingPress = true;
+                isAnimatingRelease = false;
+                animationClock.Restart();
             }
-            else
+            else if (!IsPressed && previouslyPressed) // Key up event
             {
                 VisualKeyShape.FillColor = currentDefaultColor;
+
+                animationStartScale = currentScale; // Capture current scale for animation base
+                isAnimatingRelease = true;
+                isAnimatingPress = false;
+                animationClock.Restart();
             }
-            IsPressed = currentlyPressed;
+            else if (!IsPressed && !isAnimatingRelease) // Not pressed, not animating release (steady state)
+            {
+                 VisualKeyShape.FillColor = currentDefaultColor;
+                 currentScale = 1.0f; // Ensure it's reset if no animation is running
+                 VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            }
+             else if (IsPressed && !isAnimatingPress) // Pressed, not animating press (steady state)
+            {
+                VisualKeyShape.FillColor = currentPressedColor;
+                currentScale = currentConfiguredTargetScalePress; // Stay scaled while pressed
+                VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            }
         }
 
         public bool CheckJustPressed()
