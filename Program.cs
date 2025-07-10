@@ -20,6 +20,7 @@ namespace KeyOverlay
                 throw;
             }
             window.Run();
+            window.Dispose(); // Dispose of resources when done
         }
     }
 }
