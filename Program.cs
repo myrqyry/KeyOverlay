@@ -10,17 +10,32 @@ namespace KeyOverlay
             AppWindow window;
             try
             {
+                Console.WriteLine("Creating AppWindow...");
                 window = new AppWindow();
+                Console.WriteLine("AppWindow created successfully, starting run loop...");
+                window.Run();
+                Console.WriteLine("Run loop completed");
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                Console.WriteLine($"Error: {e}");
+                Console.WriteLine($"Stack trace: {e.StackTrace}");
                 using var sw = new StreamWriter("errorMessage.txt");
                 sw.WriteLine(e.Message);
-                throw;
+                sw.WriteLine(e.StackTrace);
+                Console.WriteLine("Error details written to errorMessage.txt");
+                return;
             }
-            window.Run();
-            window.Dispose(); // Dispose of resources when done
+            
+            try
+            {
+                window.Dispose(); // Dispose of resources when done
+                Console.WriteLine("Resources disposed successfully");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error during disposal: {e}");
+            }
         }
     }
 }

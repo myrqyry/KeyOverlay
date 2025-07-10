@@ -14,6 +14,7 @@ namespace KeyOverlayEnhanced
         private float maxLifetime = 0.5f; // seconds
         private Color startColor = Color.White;
         private Color endColor = new Color(Color.White.R, Color.White.G, Color.White.B, 0);
+        private float scale = 1.0f;
 
         public TapEffect(Vector2f center, string shapeType, Profile profile)
         {
@@ -42,6 +43,24 @@ namespace KeyOverlayEnhanced
             }
         }
 
+        public void SetDuration(float duration)
+        {
+            maxLifetime = duration;
+        }
+
+        public void SetScale(float newScale)
+        {
+            scale = newScale;
+        }
+
+        public void SetColor(Color color)
+        {
+            startColor = color;
+            endColor = new Color(color.R, color.G, color.B, 0);
+            if (Shape != null)
+                Shape.FillColor = startColor;
+        }
+
         public bool Update() // Returns false if dead
         {
             float elapsed = lifetime.ElapsedTime.AsSeconds();
@@ -55,8 +74,8 @@ namespace KeyOverlayEnhanced
             Shape.FillColor = new Color(r,g,b,a);
 
             // Optional: Add scaling or other animations
-            float scale = 1.0f + ratio * 0.5f; // Grow slightly
-            Shape.Scale = new Vector2f(scale,scale);
+            float currentScale = 1.0f + ratio * (scale - 1.0f); // Scale based on profile setting
+            Shape.Scale = new Vector2f(currentScale,currentScale);
 
             return true;
         }
@@ -76,7 +95,7 @@ namespace KeyOverlayEnhanced
         public int PressCount { get; private set; }
 
         // For standard keys
-        public KeyDefinition(Keyboard.Key key, Vector2f position, Vector2f size, string label, Font font, Profile config)
+        public KeyDefinition(Keyboard.Key key, Vector2f position, Vector2f size, string label, Font font, Profile profile)
         {
             SfmlKey = key;
             IsMouseKey = false;
@@ -84,7 +103,7 @@ namespace KeyOverlayEnhanced
                 Position = position,
                 FillColor = DefaultColor,
                 OutlineColor = Color.White,
-                OutlineThickness = config.OutlineThickness
+                OutlineThickness = profile.OutlineThickness
             };
             KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = Color.White };
             KeyLabel.Position = new Vector2f(
@@ -94,7 +113,7 @@ namespace KeyOverlayEnhanced
         }
 
         // For mouse buttons (simplified)
-        public KeyDefinition(Mouse.Button button, Vector2f position, Vector2f size, string label, Font font, Profile config)
+        public KeyDefinition(Mouse.Button button, Vector2f position, Vector2f size, string label, Font font, Profile profile)
         {
             MouseButton = button;
             IsMouseKey = true;
@@ -102,7 +121,7 @@ namespace KeyOverlayEnhanced
                 Position = position,
                 FillColor = DefaultColor,
                 OutlineColor = Color.White,
-                OutlineThickness = config.OutlineThickness
+                OutlineThickness = profile.OutlineThickness
             };
             KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = Color.White };
              KeyLabel.Position = new Vector2f(
@@ -193,28 +212,34 @@ namespace KeyOverlayEnhanced
             float keySize = profile.KeySize;
 
             // This is a very basic layout. A more robust system would read keybinds from profile/config
-            AddKey("D", Keyboard.Key.D, currentX, keyY, keySize);
+            AddKey("D", Keyboard.Key.D, currentX, keyY, keySize, profile.Key1Color);
             currentX += keySize + profile.Margin;
-            AddKey("F", Keyboard.Key.F, currentX, keyY, keySize);
+            AddKey("F", Keyboard.Key.F, currentX, keyY, keySize, profile.Key2Color);
             currentX += keySize + profile.Margin;
-            AddKey("J", Keyboard.Key.J, currentX, keyY, keySize);
+            AddKey("J", Keyboard.Key.J, currentX, keyY, keySize, profile.Key3Color);
             currentX += keySize + profile.Margin;
-            AddKey("K", Keyboard.Key.K, currentX, keyY, keySize);
+            AddKey("K", Keyboard.Key.K, currentX, keyY, keySize, profile.Key4Color);
             currentX += keySize + profile.Margin;
 
             // Example Mouse Buttons
-            AddKey("M1", Mouse.Button.Left, currentX, keyY, keySize);
+            AddKey("M1", Mouse.Button.Left, currentX, keyY, keySize, profile.Key5Color);
             currentX += keySize + profile.Margin;
-            AddKey("M2", Mouse.Button.Right, currentX, keyY, keySize);
+            AddKey("M2", Mouse.Button.Right, currentX, keyY, keySize, profile.Key6Color);
         }
 
-        private void AddKey(string name, Keyboard.Key sfmlKey, float x, float y, float size)
+        private void AddKey(string name, Keyboard.Key sfmlKey, float x, float y, float size, Color color)
         {
-            keyMap[name] = new KeyDefinition(sfmlKey, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
+            var keyDef = new KeyDefinition(sfmlKey, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
+            keyDef.DefaultColor = color;
+            keyDef.PressedColor = new Color((byte)(color.R + 50), (byte)(color.G + 50), (byte)(color.B + 50), color.A);
+            keyMap[name] = keyDef;
         }
-        private void AddKey(string name, Mouse.Button mouseButton, float x, float y, float size)
+        private void AddKey(string name, Mouse.Button mouseButton, float x, float y, float size, Color color)
         {
-            keyMap[name] = new KeyDefinition(mouseButton, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
+            var keyDef = new KeyDefinition(mouseButton, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
+            keyDef.DefaultColor = color;
+            keyDef.PressedColor = new Color((byte)(color.R + 50), (byte)(color.G + 50), (byte)(color.B + 50), color.A);
+            keyMap[name] = keyDef;
         }
 
 
@@ -230,11 +255,18 @@ namespace KeyOverlayEnhanced
 
                 if (isJustPressed && (beatDetected || !profile.AudioReactive))
                 {
-                    var center = new Vector2f(
-                        keyDef.VisualKeyShape.Position.X + keyDef.VisualKeyShape.Size.X / 2,
-                        keyDef.VisualKeyShape.Position.Y + keyDef.VisualKeyShape.Size.Y / 2
-                    );
-                    tapEffects.Add(new TapEffect(center, profile.TapShape, profile));
+                    if (profile.EnableTapEffects)
+                    {
+                        var center = new Vector2f(
+                            keyDef.VisualKeyShape.Position.X + keyDef.VisualKeyShape.Size.X / 2,
+                            keyDef.VisualKeyShape.Position.Y + keyDef.VisualKeyShape.Size.Y / 2
+                        );
+                        var tapEffect = new TapEffect(center, profile.TapShape, profile);
+                        tapEffect.SetDuration(profile.TapEffectDuration);
+                        tapEffect.SetScale(profile.TapEffectScale);
+                        tapEffect.SetColor(profile.TapEffectColor);
+                        tapEffects.Add(tapEffect);
+                    }
 
                     if (profile.EnableGlitch && glitchClock.ElapsedTime.AsSeconds() >= 1f / Math.Max(1,profile.GlitchFrequency))
                     {

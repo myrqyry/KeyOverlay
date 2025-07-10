@@ -331,7 +331,7 @@ namespace KeyOverlayEnhanced
             float currentY = 0.05f;
             float spacingY = 0.07f; // Increased spacing for sliders
 
-            // Original controls
+            // Basic Settings
             CreateToggle("Fading", col1X, currentY, () => { profile.Fading = !profile.Fading; MarkDirty(); }, () => profile.Fading);
             CreateToggle("Counter", col2X, currentY, () => { profile.Counter = !profile.Counter; MarkDirty(); }, () => profile.Counter);
             currentY += spacingY;
@@ -345,24 +345,42 @@ namespace KeyOverlayEnhanced
             currentY += spacingY;
 
             CreateSlider("FPS", col1X, currentY, 15, 240, () => profile.FPS, v => { profile.FPS = v; MarkDirty(); });
-            // Placeholder for ColorPicker
-            // The setter lambda 'c => { ... }' takes an object 'c'. It needs to be cast if assigned to a strongly-typed property.
-            CreatePlaceHolder("BG Color", col2X, currentY, () => profile.BackgroundColor, c => { if(c is SFML.Graphics.Color) profile.BackgroundColor = (SFML.Graphics.Color)c; MarkDirty(); });
+            CreateSlider("Bar Height", col2X, currentY, 100, 1000, () => profile.BarHeight, v => { profile.BarHeight = v; MarkDirty(); });
             currentY += spacingY;
 
-            // Placeholder for ShapePicker
-            // The setter lambda 's => { ... }' takes an object 's'. It needs to be cast.
-            CreatePlaceHolder("Tap Shape", col1X, currentY, () => profile.TapShape, s => { if(s is string) profile.TapShape = (string)s; MarkDirty(); });
-            CreateToggle("Audio Reactive", col2X, currentY, () => { profile.AudioReactive = !profile.AudioReactive; MarkDirty(); }, () => profile.AudioReactive);
-            currentY += spacingY;
-
-            // New effect options
+            // Effect Settings
             CreateToggle("Glitch Bars", col1X, currentY, () => { profile.EnableGlitch = !profile.EnableGlitch; MarkDirty(); }, () => profile.EnableGlitch);
             CreateSlider("Glitch Freq", col2X, currentY, 1, 20, () => profile.GlitchFrequency, v => { profile.GlitchFrequency = v; MarkDirty(); });
             currentY += spacingY;
 
             CreateToggle("Pixelation", col1X, currentY, () => { profile.EnablePixelation = !profile.EnablePixelation; MarkDirty(); }, () => profile.EnablePixelation);
             CreateSlider("Pixel Size", col2X, currentY, 1, 32, () => profile.PixelSize, v => { profile.PixelSize = v; MarkDirty(); });
+            currentY += spacingY;
+
+            CreateToggle("Tap Effects", col1X, currentY, () => { profile.EnableTapEffects = !profile.EnableTapEffects; MarkDirty(); }, () => profile.EnableTapEffects);
+            CreateToggle("Bar Effects", col2X, currentY, () => { profile.EnableBarEffects = !profile.EnableBarEffects; MarkDirty(); }, () => profile.EnableBarEffects);
+            currentY += spacingY;
+
+            CreateToggle("Key Glow", col1X, currentY, () => { profile.EnableKeyGlow = !profile.EnableKeyGlow; MarkDirty(); }, () => profile.EnableKeyGlow);
+            CreateSlider("Glow Intensity", col2X, currentY, 0, 100, () => profile.GlowIntensity, v => { profile.GlowIntensity = v; MarkDirty(); });
+            currentY += spacingY;
+
+            CreateToggle("Audio Reactive", col1X, currentY, () => { profile.AudioReactive = !profile.AudioReactive; MarkDirty(); }, () => profile.AudioReactive);
+            CreateSlider("Bar Speed Mult", col2X, currentY, 0, 3, () => (int)(profile.BarSpeedMultiplier * 100), v => { profile.BarSpeedMultiplier = v / 100f; MarkDirty(); });
+            currentY += spacingY;
+
+            // Tap Effect Settings
+            CreateSlider("Tap Duration", col1X, currentY, 1, 20, () => (int)(profile.TapEffectDuration * 10), v => { profile.TapEffectDuration = v / 10f; MarkDirty(); });
+            CreateSlider("Tap Scale", col2X, currentY, 5, 30, () => (int)(profile.TapEffectScale * 10), v => { profile.TapEffectScale = v / 10f; MarkDirty(); });
+            currentY += spacingY;
+
+            // Color Settings (simplified for now)
+            CreatePlaceHolder("BG Color", col1X, currentY, () => profile.BackgroundColor, c => { if(c is SFML.Graphics.Color) profile.BackgroundColor = (SFML.Graphics.Color)c; MarkDirty(); });
+            CreatePlaceHolder("Glitch Color", col2X, currentY, () => profile.GlitchColor, c => { if(c is SFML.Graphics.Color) profile.GlitchColor = (SFML.Graphics.Color)c; MarkDirty(); });
+            currentY += spacingY;
+
+            CreatePlaceHolder("Tap Effect Color", col1X, currentY, () => profile.TapEffectColor, c => { if(c is SFML.Graphics.Color) profile.TapEffectColor = (SFML.Graphics.Color)c; MarkDirty(); });
+            CreatePlaceHolder("Tap Shape", col2X, currentY, () => profile.TapShape, s => { if(s is string) profile.TapShape = (string)s; MarkDirty(); });
             currentY += spacingY * 1.5f; // Extra space before buttons
 
             // Save/Load

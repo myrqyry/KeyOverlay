@@ -1,58 +1,35 @@
 ﻿using System;
 using System.Collections.Generic;
-// using System.Globalization; // No longer directly needed here for parsing
-// using System.IO; // No longer directly needed here for config
-// using System.Linq; // May not be needed after refactor
-// using System.Threading; // No longer directly needed for config watcher
 using SFML.Graphics;
 using SFML.System;
 using SFML.Window;
-using KeyOverlayEnhanced; // Namespace for new classes
+using KeyOverlayEnhanced;
 
-namespace KeyOverlay // Original namespace
+namespace KeyOverlay
 {
     public class AppWindow : IDisposable
     {
         private RenderWindow _window;
-        // private Vector2u _size; // Window size will be managed by SFML, UI adapts
-        // Old fields to be replaced or managed by Profile/CustomUI
-        // private List<Key> _keyList;
-        // private List<RectangleShape> _squareList;
-        // private float _barSpeed;
-        // private float _ratioX;
-        // private float _ratioY;
-        // private int _outlineThickness;
-        // private Color _backgroundColor;
-        // private Color _fontColor;
-        // private bool _fading;
-        // private bool _counter;
-        // private List<Drawable> _staticDrawables;
-        // private uint _maxFPS;
-
-        private Clock _gameClock = new Clock(); // Renamed from _clock for clarity
-        // private Config _config; // Replaced by Profile
-        private object _lock = new object(); // May still be useful if any async operations remain
-
         private Profile _profile;
         private SettingsPanel _settingsPanel;
         private CustomUI _customUI;
         private AudioAnalyzer _audioAnalyzer;
-        private Font _appFont; // General purpose font
-
-        // For fading effect, might need to be adapted or moved to CustomUI
-        private RenderTexture _fadingTexture;
-        private Sprite _fadingSprite;
-
+        private Font _appFont;
+        private object _lock = new object();
 
         public AppWindow()
         {
+            Console.WriteLine("Starting AppWindow initialization...");
+            
             // Load profile first as it dictates window settings
             _profile = Profile.Load("profile.json");
+            Console.WriteLine("Profile loaded successfully");
 
             // Use a default font, ensure "Resources/consolab.ttf" exists or handle error
             try
             {
                 _appFont = new Font(_profile.FontPath);
+                Console.WriteLine("Font loaded successfully");
             }
             catch (SFML.LoadingFailedException ex)
             {
@@ -64,15 +41,20 @@ namespace KeyOverlay // Original namespace
 
             // Initial window size can be from profile or a default
             _window = new RenderWindow(new VideoMode(800, 600), "Key Overlay Enhanced", Styles.Default);
-            // _size = _window.Size; // Store initial size, though it can change
+            Console.WriteLine("Window created successfully");
 
             _audioAnalyzer = new AudioAnalyzer(); // Initialize audio analyzer
+            Console.WriteLine("AudioAnalyzer created successfully");
 
             // Initialize UI components AFTER _window and _appFont are ready
             _customUI = new CustomUI(_profile, _window, _audioAnalyzer, _appFont);
+            Console.WriteLine("CustomUI created successfully");
+            
             _settingsPanel = new SettingsPanel(_appFont, new Vector2f(_window.Size.X, _window.Size.Y), _profile);
+            Console.WriteLine("SettingsPanel created successfully");
 
             InitializeGraphics(); // New method to setup graphics based on profile
+            Console.WriteLine("Graphics initialized successfully");
         }
 
         public void InitializeGraphics() // Was Initialize()
@@ -82,54 +64,10 @@ namespace KeyOverlay // Original namespace
                 // Ensure FPS is positive before casting to uint
                 _window.SetFramerateLimit((uint)Math.Max(1, _profile.FPS));
 
-                // Fading effect setup (simplified, may need rework with CustomUI)
-                if (_profile.Fading)
-                {
-                    SetupFadingEffect();
-                }
-
                 // Initial layout calculation for CustomUI if needed
-                 _customUI.RecalculateLayout();
+                _customUI.RecalculateLayout();
             }
         }
-
-        private void SetupFadingEffect()
-        {
-            // This is a simplified version of the original fading logic.
-            // It assumes Fading.GetBackgroundColorFadingTexture is available or reimplemented.
-            // For now, let's create a dummy fading sprite.
-            // The original `Fading` class and `CreateItems` are not in the provided snippets for KeyOverlayEnhanced.
-            // This part will need the definitions of those helper classes or be integrated into CustomUI.
-
-            // Placeholder:
-            if (_fadingTexture != null) _fadingTexture.Dispose();
-            if (_fadingSprite != null) _fadingSprite.Dispose();
-
-            // We need a way to get the fading texture. Assuming a helper or adapting original.
-            // For now, let's make a simple gradient if Fading class is not available.
-            _fadingTexture = new RenderTexture(_window.Size.X, (uint)(255 * 2)); // Approximation
-            _fadingTexture.Clear(Color.Transparent);
-
-            if (_profile.Fading) // Check profile setting
-            {
-                 // Simple vertical gradient from background color to transparent (simulating old effect)
-                Vertex[] gradient = new Vertex[4 * 255];
-                for (uint i = 0; i < 255; i++)
-                {
-                    Color color = new Color(_profile.BackgroundColor.R, _profile.BackgroundColor.G, _profile.BackgroundColor.B, (byte)(255-i));
-                    gradient[i*4 + 0] = new Vertex(new Vector2f(0, i * 2), color);
-                    gradient[i*4 + 1] = new Vertex(new Vector2f(_window.Size.X, i * 2), color);
-                    gradient[i*4 + 2] = new Vertex(new Vector2f(_window.Size.X, (i+1) * 2), color);
-                    gradient[i*4 + 3] = new Vertex(new Vector2f(0, (i+1) * 2), color);
-
-                }
-                 _fadingTexture.Draw(gradient, PrimitiveType.Quads);
-            }
-            _fadingTexture.Display();
-            _fadingSprite = new Sprite(_fadingTexture.Texture);
-            _fadingSprite.Position = new Vector2f(0, _window.Size.Y - _fadingTexture.Size.Y); // Position at bottom
-        }
-
 
         private void OnClose(object sender, EventArgs e)
         {
@@ -152,7 +90,6 @@ namespace KeyOverlay // Original namespace
             // Notify CustomUI and SettingsPanel if they need to adjust layout
             // _settingsPanel.UpdateWindowSize(new Vector2f(e.Width, e.Height)); // Requires method in SettingsPanel
             _customUI.RecalculateLayout(); // If CustomUI layout depends on window size
-            if(_profile.Fading) SetupFadingEffect(); // Recreate fading effect for new size
         }
 
         private void OnMouseButtonPressed(object sender, MouseButtonEventArgs e)
@@ -222,12 +159,6 @@ namespace KeyOverlay // Original namespace
 
                 _customUI.Render(_window);
 
-                if (_profile.Fading && _fadingSprite != null)
-                {
-                    _fadingSprite.Position = new Vector2f(0, _window.Size.Y - _fadingTexture.Size.Y - _profile.KeySize - _profile.Margin*2);
-                    _window.Draw(_fadingSprite);
-                }
-
                 // SettingsPanel drawing is handled AFTER all game elements
                 // Its HandleEvent is now part of the event loop above.
                 _settingsPanel.Draw(_window);
@@ -249,8 +180,6 @@ namespace KeyOverlay // Original namespace
                 {
                     // Dispose managed state (managed objects).
                     _appFont?.Dispose();
-                    _fadingTexture?.Dispose();
-                    _fadingSprite?.Dispose(); // Sprite itself is IDisposable
                     _settingsPanel = null; // Allow GC if panel holds resources indirectly
                     _customUI = null;      // Allow GC
                     _audioAnalyzer = null; // Allow GC

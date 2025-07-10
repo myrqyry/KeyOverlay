@@ -18,7 +18,7 @@ namespace KeyOverlayEnhanced
             Bar = new RectangleShape(new Vector2f(windowWidth, height))
             {
                 Position = new Vector2f(0, yPosition - height / 2),
-                FillColor = new Color((byte)random.Next(255), (byte)random.Next(255), (byte)random.Next(255), (byte)random.Next(100, 200))
+                FillColor = profile.GlitchColor // Use profile color instead of random
             };
         }
 
