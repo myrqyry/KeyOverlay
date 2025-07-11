@@ -393,10 +393,19 @@ namespace KeyOverlayEnhanced
 
         public void RefreshSkinList()
         {
-            skinNames = skinManager.AvailableSkinNames.ToList(); // Get a copy
+            if (skinManager.AvailableSkinNames != null)
+            {
+                skinNames = skinManager.AvailableSkinNames.ToList(); // Get a copy
+            }
+            else
+            {
+                skinNames = new List<string>(); // Fallback to an empty list if AvailableSkinNames is somehow null
+                Console.WriteLine("Warning: SkinManager.AvailableSkinNames was null. Initializing to empty list.");
+            }
+
             if (!skinNames.Any()) skinNames.Add("Default (Built-in)");
 
-            selectedIndex = skinNames.IndexOf(skinManager.CurrentSkinDirectoryName);
+            selectedIndex = skinNames.IndexOf(skinManager.CurrentSkinDirectoryName ?? string.Empty); // Add null check for CurrentSkinDirectoryName too
             if (selectedIndex < 0) selectedIndex = 0;
 
             UpdateItemButtons();
