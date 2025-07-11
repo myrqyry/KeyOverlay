@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using SFML.Graphics;
 using SFML.System;
 using SFML.Window; // Required for Event
+using System.Linq; // Added for LINQ extension methods
 
 namespace KeyOverlayEnhanced
 {
@@ -761,10 +762,19 @@ namespace KeyOverlayEnhanced
         // }
 
 
+        // Overload for specific size
+        private ButtonControl CreateButton(string text, float xPercent, float yPercent, Vector2f size, Action onClick)
+        {
+            var button = new ButtonControl(text, GetRelativePos(xPercent, yPercent), size, font, skinManager.CurrentSkin, onClick);
+            controls.Add(button);
+            return button;
+        }
+
+        // Original overload (if still needed, though currently not used by BuildControls directly for save button)
         private ButtonControl CreateButton(string text, float xPercent, float yPercent, Action onClick)
         {
-            // This overload is now correctly passing skinManager.CurrentSkin
-            var button = new ButtonControl(text, GetRelativePos(xPercent, yPercent), new Vector2f(panelSize.X * 0.4f, 30), font, onClick);
+            var defaultSize = new Vector2f(panelSize.X * 0.4f, 30f); // Default size
+            var button = new ButtonControl(text, GetRelativePos(xPercent, yPercent), defaultSize, font, skinManager.CurrentSkin, onClick);
             controls.Add(button);
             return button;
         }
