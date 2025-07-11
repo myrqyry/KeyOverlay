@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 #nullable enable
 using System;
 using System.Collections.Generic;
@@ -16,7 +14,7 @@ namespace KeyOverlayEnhanced
 
         public List<string> AvailableSkinNames { get; private set; } = new List<string>();
         public SkinProfile CurrentSkin { get; set; } // Made setter public
-        public string CurrentSkinDirectoryName { get; private set; }
+        public string CurrentSkinDirectoryName { get; private set; } = "Default (Built-in)"; // Initialize here
 
         private SkinProfile _defaultSkin;
 
@@ -72,7 +70,7 @@ namespace KeyOverlayEnhanced
             if (!AvailableSkinNames.Any())
             {
                 // If no skins are found in subdirectories, ensure the "Default (Built-in)" is an option
-                AvailableSkinNames.Add("Default (Built-in)");
+                AvailableSkinsNames.Add("Default (Built-in)");
                  if (string.IsNullOrEmpty(CurrentSkinDirectoryName) || CurrentSkin == null)
                  {
                     CurrentSkinDirectoryName = "Default (Built-in)";
