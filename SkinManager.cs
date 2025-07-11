@@ -70,7 +70,7 @@ namespace KeyOverlayEnhanced
             if (!AvailableSkinNames.Any())
             {
                 // If no skins are found in subdirectories, ensure the "Default (Built-in)" is an option
-                AvailableSkinsNames.Add("Default (Built-in)");
+                AvailableSkinNames.Add("Default (Built-in)"); // Corrected typo here
                  if (string.IsNullOrEmpty(CurrentSkinDirectoryName) || CurrentSkin == null)
                  {
                     CurrentSkinDirectoryName = "Default (Built-in)";
