@@ -1,4 +1,3 @@
-#nullable enable
 using System.IO;
 using System.Text.Json;
 using SFML.Graphics; // Required for Color
@@ -69,19 +68,6 @@ namespace KeyOverlayEnhanced
 
         // Stores the directory name of the currently selected skin (e.g., "DefaultDark")
         public string CurrentSkinDirectoryName { get; set; } = "Default (Built-in)"; // Default to the built-in skin
-
-        // Legacy properties for backward compatibility (these are now handled by SkinProfile)
-        [System.Text.Json.Serialization.JsonIgnore]
-        public Color BackgroundColor { get; set; } = new Color(0, 0, 0, 255);
-        
-        [System.Text.Json.Serialization.JsonIgnore]
-        public Color GlitchColor { get; set; } = new Color(255, 0, 0, 150);
-        
-        [System.Text.Json.Serialization.JsonIgnore]
-        public Color TapEffectColor { get; set; } = new Color(255, 255, 255, 255);
-        
-        [System.Text.Json.Serialization.JsonIgnore]
-        public string TapShape { get; set; } = "Circle";
 
         // Helper methods for colors are no longer needed here as these properties are removed.
         // e.g. [System.Text.Json.Serialization.JsonIgnore] public Color Key1Color { ... }

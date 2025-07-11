@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,8 +12,8 @@ namespace KeyOverlayEnhanced
         public const string SkinFileName = "skin.json";
 
         public List<string> AvailableSkinNames { get; private set; } = new List<string>();
-        public SkinProfile CurrentSkin { get; set; }
-        public string CurrentSkinDirectoryName { get; private set; } = "Default (Built-in)";
+        public SkinProfile CurrentSkin { get; private set; }
+        public string CurrentSkinDirectoryName { get; private set; }
 
         private SkinProfile _defaultSkin;
 

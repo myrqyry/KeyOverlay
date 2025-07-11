@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using SFML.Graphics;
 using SFML.System;
 using SFML.Window; // Required for Event
@@ -21,42 +20,75 @@ namespace KeyOverlayEnhanced
         private RectangleShape shape;
         private Text label;
         private Action onClick;
+        private SkinProfile currentSkin; // Store to access colors
+        private Font currentFont;
+        private bool isHovered = false;
 
-        public ButtonControl(string text, Vector2f position, Vector2f size, Font font, Action onClick)
+        public ButtonControl(string text, Vector2f position, Vector2f size, Font font, SkinProfile skin, Action onClick)
         {
             this.onClick = onClick;
+            this.currentSkin = skin;
+            this.currentFont = font;
             Bounds = new FloatRect(position, size);
 
             shape = new RectangleShape(size)
             {
                 Position = position,
-                FillColor = new Color(70, 70, 70),
-                OutlineColor = Color.White,
-                OutlineThickness = 1
+                FillColor = skin.ButtonBackgroundColor.SfmlColor,
+                OutlineColor = skin.ControlOutlineColor.SfmlColor, // Use control outline
+                OutlineThickness = 1 // Consistent outline thickness
             };
 
-            label = new Text(text, font, 16)
+            label = new Text(text, font, 16) // Font size could be skinnable
             {
-                Position = new Vector2f(position.X + 5, position.Y + 5),
-                FillColor = Color.White
+                FillColor = skin.ButtonTextColor.SfmlColor
             };
+            // Center label on button
+            label.Position = new Vector2f(
+                position.X + (size.X - label.GetGlobalBounds().Width) / 2f,
+                position.Y + (size.Y - label.GetGlobalBounds().Height) / 2f - label.GetLocalBounds().Top // Adjust for local bounds top
+            );
         }
+
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.currentSkin = newSkin;
+            this.currentFont = newFont; // Update font if text elements need it
+            shape.FillColor = isHovered ? newSkin.ButtonHoverBackgroundColor.SfmlColor : newSkin.ButtonBackgroundColor.SfmlColor;
+            shape.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+            label.Font = newFont;
+            label.FillColor = newSkin.ButtonTextColor.SfmlColor;
+            // Recenter label
+            label.Position = new Vector2f(
+                shape.Position.X + (shape.Size.X - label.GetGlobalBounds().Width) / 2f,
+                shape.Position.Y + (shape.Size.Y - label.GetGlobalBounds().Height) / 2f - label.GetLocalBounds().Top
+            );
+        }
+
 
         public override void Draw(RenderWindow window)
         {
+            // Update fill color based on hover state (alternative to doing it in HandleEvent)
+            // This requires mousePos to be passed to Draw or checked here.
+            // For simplicity, HandleEvent will manage isHovered, and Draw uses it.
+            shape.FillColor = isHovered ? currentSkin.ButtonHoverBackgroundColor.SfmlColor : currentSkin.ButtonBackgroundColor.SfmlColor;
             window.Draw(shape);
             window.Draw(label);
         }
 
         public override void HandleEvent(Event e, Vector2f mousePos)
         {
-            if (e.Type == EventType.MouseButtonPressed && e.MouseButton.Button == Mouse.Button.Left)
+            bool previousHoverState = isHovered;
+            isHovered = IsMouseOver(mousePos);
+
+            if (isHovered && e.Type == EventType.MouseButtonPressed && e.MouseButton.Button == Mouse.Button.Left)
             {
-                if (IsMouseOver(mousePos))
-                {
-                    onClick?.Invoke();
-                }
+                onClick?.Invoke();
             }
+            // No need to directly change color here if Draw handles it based on isHovered
+            // else if (previousHoverState != isHovered) {
+            //    shape.FillColor = isHovered ? currentSkin.ButtonHoverBackgroundColor.SfmlColor : currentSkin.ButtonBackgroundColor.SfmlColor;
+            // }
         }
         public void SetText(string text)
         {
@@ -71,35 +103,53 @@ namespace KeyOverlayEnhanced
         private Action onToggle;
         private Func<bool> getter;
         private bool isChecked;
+        private SkinProfile currentSkin;
+        private Font currentFont;
 
-        public ToggleControl(string text, Vector2f position, Font font, Action onToggle, Func<bool> getter)
+        public ToggleControl(string text, Vector2f position, Font font, SkinProfile skin, Action onToggle, Func<bool> getter)
         {
             this.onToggle = onToggle;
             this.getter = getter;
             this.isChecked = getter();
+            this.currentSkin = skin;
+            this.currentFont = font;
 
-            label = new Text(text, font, 16)
+            label = new Text(text, font, 16) // Font size skinnable?
             {
-                Position = new Vector2f(position.X + 25, position.Y),
-                FillColor = Color.White
+                Position = new Vector2f(position.X + 25, position.Y), // Label to the right of the box
+                FillColor = skin.PanelTextColor.SfmlColor // Use panel text color for label
             };
 
-            Bounds = new FloatRect(position, new Vector2f(20 + label.GetGlobalBounds().Width + 5, 20));
+            // Bounds need to accommodate the box and the label
+            float boxSize = 20f;
+            Bounds = new FloatRect(position, new Vector2f(boxSize + 5 + label.GetGlobalBounds().Width, boxSize));
 
-
-            box = new RectangleShape(new Vector2f(20, 20))
+            box = new RectangleShape(new Vector2f(boxSize, boxSize))
             {
                 Position = position,
-                FillColor = isChecked ? Color.Green : new Color(70, 70, 70),
-                OutlineColor = Color.White,
+                FillColor = isChecked ? skin.ControlAccentColor.SfmlColor : skin.ControlBackgroundColor.SfmlColor,
+                OutlineColor = skin.ControlOutlineColor.SfmlColor,
                 OutlineThickness = 1
             };
         }
 
-        public void UpdateState()
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.currentSkin = newSkin;
+            this.currentFont = newFont;
+
+            label.Font = newFont;
+            label.FillColor = newSkin.PanelTextColor.SfmlColor;
+            // Reposition label if font size changed significantly (not handled here, assumes fixed font size for now)
+
+            box.FillColor = isChecked ? newSkin.ControlAccentColor.SfmlColor : newSkin.ControlBackgroundColor.SfmlColor;
+            box.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+        }
+
+        public void UpdateState() // Call this if the underlying bool state changes externally
         {
             isChecked = getter();
-            box.FillColor = isChecked ? Color.Green : new Color(70, 70, 70);
+            box.FillColor = isChecked ? currentSkin.ControlAccentColor.SfmlColor : currentSkin.ControlBackgroundColor.SfmlColor;
         }
 
 
@@ -131,43 +181,71 @@ namespace KeyOverlayEnhanced
         private Action<int> onValueChanged;
         private Func<int> getter;
         private Text valueText;
-        private Font font;
+        private Font currentFont; // Changed from 'font'
+        private SkinProfile currentSkin;
 
-        public SliderControl(string text, Vector2f position, float min, float max, Font font, Func<int> getter, Action<int> onValueChanged)
+        public SliderControl(string text, Vector2f position, float min, float max, Font font, SkinProfile skin, Func<int> getter, Action<int> onValueChanged)
         {
-            this.label = new Text(text, font, 16) { Position = position, FillColor = Color.White };
+            this.currentSkin = skin;
+            this.currentFont = font;
+            this.label = new Text(text, font, 16) { Position = position, FillColor = skin.PanelTextColor.SfmlColor };
             this.minValue = min;
             this.maxValue = max;
             this.getter = getter;
             this.currentValue = getter();
             this.onValueChanged = onValueChanged;
-            this.font = font;
 
-            float trackWidth = 150;
-            float trackHeight = 10;
-            float thumbSize = 20;
+            float trackWidth = 150; // Could be skinnable
+            float trackHeight = 8;  // Skinnable
+            float thumbSize = 18;   // Skinnable
 
             track = new RectangleShape(new Vector2f(trackWidth, trackHeight))
             {
-                Position = new Vector2f(position.X, position.Y + 25),
-                FillColor = new Color(50, 50, 50)
+                Position = new Vector2f(position.X, position.Y + 25 + (thumbSize - trackHeight)/2), // Center track with thumb vertically
+                FillColor = skin.ControlBackgroundColor.SfmlColor,
+                OutlineColor = skin.ControlOutlineColor.SfmlColor,
+                OutlineThickness = 1
             };
 
             thumb = new RectangleShape(new Vector2f(thumbSize, thumbSize))
             {
-                FillColor = Color.White,
+                FillColor = skin.ControlAccentColor.SfmlColor, // Use accent color for thumb
+                OutlineColor = skin.ControlOutlineColor.SfmlColor,
+                OutlineThickness = 1,
                 Origin = new Vector2f(thumbSize / 2f, thumbSize / 2f)
             };
 
-            valueText = new Text(currentValue.ToString("F0"), font, 14) { FillColor = Color.White };
+            valueText = new Text(currentValue.ToString("F0"), font, 14) { FillColor = skin.PanelTextColor.SfmlColor };
 
-            Bounds = new FloatRect(position, new Vector2f(Math.Max(trackWidth, label.GetGlobalBounds().Width), 25 + trackHeight + 5));
+            Bounds = new FloatRect(position, new Vector2f(Math.Max(trackWidth, label.GetGlobalBounds().Width) + 40, 25 + thumbSize + 5)); // +40 for valueText
 
             UpdateThumbPosition();
             UpdateValueText();
         }
 
-        public void UpdateState()
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.currentSkin = newSkin;
+            this.currentFont = newFont;
+
+            label.Font = newFont;
+            label.FillColor = newSkin.PanelTextColor.SfmlColor;
+
+            track.FillColor = newSkin.ControlBackgroundColor.SfmlColor;
+            track.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+
+            thumb.FillColor = newSkin.ControlAccentColor.SfmlColor;
+            thumb.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+
+            valueText.Font = newFont;
+            valueText.FillColor = newSkin.PanelTextColor.SfmlColor;
+
+            // Recalculate positions/bounds if sizes changed due to skin (not currently the case)
+            UpdateThumbPosition(); // Ensure thumb is correctly placed with new potential sizes
+            UpdateValueText();
+        }
+
+        public void UpdateState() // Call if underlying value changes externally
         {
             currentValue = getter();
             UpdateThumbPosition();
@@ -176,14 +254,15 @@ namespace KeyOverlayEnhanced
 
         private void UpdateThumbPosition()
         {
-            float ratio = (currentValue - minValue) / (maxValue - minValue);
+            float ratio = (maxValue - minValue == 0) ? 0 : (currentValue - minValue) / (maxValue - minValue); // Avoid div by zero
             thumb.Position = new Vector2f(track.Position.X + ratio * track.Size.X, track.Position.Y + track.Size.Y / 2);
         }
 
         private void UpdateValueText()
         {
             valueText.DisplayedString = currentValue.ToString("F0");
-            valueText.Position = new Vector2f(track.Position.X + track.Size.X + 10, track.Position.Y );
+            // Position value text to the right of the track
+            valueText.Position = new Vector2f(track.Position.X + track.Size.X + 10, track.Position.Y + (track.Size.Y - valueText.GetGlobalBounds().Height) / 2f - valueText.GetLocalBounds().Top);
         }
 
 
@@ -256,36 +335,59 @@ namespace KeyOverlayEnhanced
         private int selectedIndex = 0;
         private bool isOpen = false;
         private List<ButtonControl> itemButtons = new List<ButtonControl>();
-        private Font font;
+        private Font currentFont; // Renamed from font
         private Action<string> onSkinSelected;
-        private SkinManager skinManager; // To get available skins
-        private Vector2f position;
-        private Vector2f size;
+        private SkinManager skinManager;
+        private Vector2f controlBasePosition; // To distinguish from shape's position field
+        private Vector2f controlSize; // To distinguish from shape's size field
+        private SkinProfile currentSkin;
 
-        public SkinSelectorControl(string text, Vector2f pos, Vector2f sz, Font fnt, SkinManager sm, Action<string> onSelected)
+        public SkinSelectorControl(string text, Vector2f pos, Vector2f sz, Font fnt, SkinProfile skin, SkinManager sm, Action<string> onSelected)
         {
-            label = new Text(text, fnt, 16) { Position = pos, FillColor = Color.White };
-            position = new Vector2f(pos.X, pos.Y + 20); // Position box below label
-            size = sz;
-            font = fnt;
-            skinManager = sm;
+            this.currentSkin = skin;
+            this.currentFont = fnt;
+            label = new Text(text, fnt, 16) { Position = pos, FillColor = skin.PanelTextColor.SfmlColor };
+            this.controlBasePosition = new Vector2f(pos.X, pos.Y + 20);
+            this.controlSize = sz;
+            this.skinManager = sm;
             this.onSkinSelected = onSelected;
 
-            mainBox = new RectangleShape(size)
+            mainBox = new RectangleShape(controlSize)
             {
-                Position = position,
-                FillColor = new Color(70, 70, 70),
-                OutlineColor = Color.White,
+                Position = controlBasePosition,
+                FillColor = skin.ControlBackgroundColor.SfmlColor,
+                OutlineColor = skin.ControlOutlineColor.SfmlColor,
                 OutlineThickness = 1
             };
 
-            selectedSkinText = new Text("", font, 16) { FillColor = Color.White };
-            selectedSkinText.Position = new Vector2f(position.X + 5, position.Y + (size.Y - selectedSkinText.GetGlobalBounds().Height) / 2 - 5);
+            selectedSkinText = new Text("", currentFont, 16) { FillColor = skin.ControlTextColor.SfmlColor };
+            // Center selectedSkinText
+            UpdateSelectedText(); // Call this to also set initial position correctly
 
-            Bounds = new FloatRect(position, size); // Initial bounds for the main box
+            Bounds = new FloatRect(controlBasePosition, controlSize);
 
-            RefreshSkinList();
-            UpdateSelectedText();
+            RefreshSkinList(); // This also calls UpdateSelectedText
+        }
+
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.currentSkin = newSkin;
+            this.currentFont = newFont;
+
+            label.Font = newFont;
+            label.FillColor = newSkin.PanelTextColor.SfmlColor;
+
+            mainBox.FillColor = newSkin.ControlBackgroundColor.SfmlColor;
+            mainBox.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+
+            selectedSkinText.Font = newFont;
+            selectedSkinText.FillColor = newSkin.ControlTextColor.SfmlColor;
+
+            // Re-create item buttons as their skin/font also needs updating
+            // This implicitly happens if RefreshSkinList -> UpdateItemButtons is called
+            // Or UpdateItemButtons itself could pass the new skin/font to ButtonControl constructor
+            RefreshSkinList(); // This will rebuild buttons with new skin context if needed
+            UpdateSelectedText(); // Ensure text position is correct with new font
         }
 
         public void RefreshSkinList()
@@ -308,24 +410,25 @@ namespace KeyOverlayEnhanced
                 for (int i = 0; i < skinNames.Count; i++)
                 {
                     var skinName = skinNames[i];
-                    var buttonPos = new Vector2f(position.X, position.Y + size.Y + i * (size.Y + 2));
-                    var button = new ButtonControl(skinName, buttonPos, size, font, () => SelectSkin(skinName));
+                    var buttonPos = new Vector2f(controlBasePosition.X, controlBasePosition.Y + controlSize.Y + i * (controlSize.Y + 2));
+                    // Pass currentSkin and currentFont to the ButtonControl for dropdown items
+                    var button = new ButtonControl(skinName, buttonPos, controlSize, currentFont, currentSkin, () => SelectSkin(skinName));
                     itemButtons.Add(button);
                 }
                  // Update overall bounds if dropdown is open
                 if (itemButtons.Any())
                 {
                     var lastButton = itemButtons.Last();
-                    Bounds = new FloatRect(position.X, position.Y, size.X, lastButton.Bounds.Top + lastButton.Bounds.Height - position.Y);
+                    Bounds = new FloatRect(controlBasePosition.X, controlBasePosition.Y, controlSize.X, lastButton.Bounds.Top + lastButton.Bounds.Height - controlBasePosition.Y);
                 }
                 else
                 {
-                     Bounds = new FloatRect(position, size);
+                     Bounds = new FloatRect(controlBasePosition, controlSize);
                 }
             }
             else
             {
-                 Bounds = new FloatRect(position, size); // Reset to main box bounds
+                 Bounds = new FloatRect(controlBasePosition, controlSize); // Reset to main box bounds
             }
         }
 
@@ -352,7 +455,11 @@ namespace KeyOverlayEnhanced
             {
                 selectedSkinText.DisplayedString = "No Skins";
             }
-            selectedSkinText.Position = new Vector2f(position.X + 5, position.Y + (size.Y - selectedSkinText.GetGlobalBounds().Height) / 2 - selectedSkinText.GetLocalBounds().Top);
+            // Center the text within the mainBox
+            selectedSkinText.Position = new Vector2f(
+                controlBasePosition.X + (controlSize.X - selectedSkinText.GetGlobalBounds().Width) / 2f,
+                controlBasePosition.Y + (controlSize.Y - selectedSkinText.GetGlobalBounds().Height) / 2f - selectedSkinText.GetLocalBounds().Top
+            );
         }
 
         public void SetSelectedSkin(string skinDirectoryName)
@@ -442,41 +549,41 @@ namespace KeyOverlayEnhanced
             background = new RectangleShape(panelSize)
             {
                 Position = panelPosition,
-                // Background color could be part of the settings panel's own skin in the future
-                FillColor = new Color(30, 30, 30, 220),
-                OutlineColor = Color.White,
-                OutlineThickness = 2
+                FillColor = skinManager.CurrentSkin.PanelBackgroundColor.SfmlColor,
+                OutlineColor = skinManager.CurrentSkin.ControlOutlineColor.SfmlColor, // Use control outline for panel border
+                OutlineThickness = 1 // Thinner outline for panel
             };
 
-            dirtyIndicator = new Text("*", font, 20) { FillColor = Color.Red };
+            dirtyIndicator = new Text("*", font, 20) { FillColor = skinManager.CurrentSkin.DirtyIndicatorColor.SfmlColor };
 
-            BuildControls(); // Builds general profile controls
-            LoadProfileToUI(); // Loads general profile settings into controls
+            BuildControls();
+            LoadProfileToUI();
             UpdateSaveLabel();
         }
 
         public void UpdateSkin(SkinProfile newSkin, Font newFont)
         {
-            this.font = newFont;
-            // Potentially update colors/styles of the panel itself if it were skinnable
-            // For now, just rebuild controls if font changed significantly, or update font for text elements
-            // Re-create text elements or update their font
-            dirtyIndicator.Font = newFont;
-            // Controls themselves would need an UpdateFont method or be recreated
-            // For simplicity, we might need to rebuild controls if font changes.
-            // However, many controls get font passed at creation and might not update automatically.
-            // This is a complex part of UI skinning.
+            this.font = newFont; // Update font for new controls
 
-            // If the skin selector is present, tell it to update its list and current selection display
-            skinSelector?.RefreshSkinList();
-            skinSelector?.SetSelectedSkin(skinManager.CurrentSkinDirectoryName);
+            // Update panel's own appearance
+            background.FillColor = newSkin.PanelBackgroundColor.SfmlColor;
+            background.OutlineColor = newSkin.ControlOutlineColor.SfmlColor;
+            dirtyIndicator.Font = newFont; // Already done, but good to keep
+            dirtyIndicator.FillColor = newSkin.DirtyIndicatorColor.SfmlColor;
 
+            // Rebuild controls to apply new font and new skin colors to them
+            // Individual controls will pick up their specific colors during their construction/UpdateSkin call
+            BuildControls();
+            LoadProfileToUI(); // Reload profile values into the newly styled controls
 
-            // Re-color background based on skin? For now, it's fixed.
-            // background.FillColor = newSkin.SomePanelBackgroundColor;
-            Console.WriteLine($"SettingsPanel skin updated. Font: {newFont}");
-            BuildControls(); // Rebuild to ensure new font is used by controls.
-            LoadProfileToUI(); // And reload values.
+            // Update the skin selector specifically as it's a complex control
+            skinSelector?.RefreshSkinList(); // Ensure it has the latest list of skins
+            skinSelector?.SetSelectedSkin(skinManager.CurrentSkinDirectoryName); // Ensure selection is current
+            // skinSelector's own UpdateSkin will be called during BuildControls if it's recreated,
+            // or we could call it explicitly if BuildControls doesn't always recreate all types.
+            // For now, assuming BuildControls handles it.
+
+            Console.WriteLine($"SettingsPanel skin updated to: {newSkin.SkinName}. Font: {newFont.ToString()}"); // Check font object
         }
 
 
@@ -519,88 +626,98 @@ namespace KeyOverlayEnhanced
         private void BuildControls()
         {
             controls.Clear();
-            float col1X = 0.05f;
-            float col2X = 0.50f;
-            float currentY = 0.05f;
-            float spacingY = 0.06f; // Slightly reduced for more controls
-            float controlHeight = 30f; // Approximate height for positioning skin selector
+            float outerMargin = 0.04f;
+            float col1X = outerMargin;
+            float columnGap = 0.04f;
+            float colWidth = (1.0f - (2 * outerMargin) - columnGap) / 2f;
+            float col2X = col1X + colWidth + columnGap;
 
-            // Skin Selector - Placed at the top
+            float currentY = outerMargin; // Start Y position
+            float verticalRowSpacing = 0.075f; // Increased vertical spacing between rows of controls
+            float controlItemHeight = 30f; // Standard height for most controls (buttons, dropdown box part)
+            float sectionBottomMargin = verticalRowSpacing * 0.5f; // Extra space after a group of settings
+
+            // Skin Selector - Spans both columns
+            var skinSelectorLabelActualPos = GetRelativePos(col1X, currentY);
+            // The SkinSelectorControl itself handles the label and the box below it.
+            // We give it the top-left for its label, and it calculates its box position.
+            // The size is for the main box of the selector.
+            var skinSelectorBoxSize = new Vector2f(panelSize.X * (colWidth * 2f + columnGap), controlItemHeight);
+
             skinSelector = new SkinSelectorControl(
-                "Current Skin:",
-                GetRelativePos(col1X, currentY),
-                new Vector2f(panelSize.X * 0.85f, controlHeight), // Make it wider
+                "Current Skin:", // This is the label text for the SkinSelector
+                skinSelectorLabelActualPos,
+                skinSelectorBoxSize,
                 font,
-                skinManager,
+                skinManager.CurrentSkin, // Pass current skin for initial styling of the selector itself
+                skinManager, // Pass the manager for listing skins
                 (selectedSkinDirName) => {
                     if (skinManager.LoadSkin(selectedSkinDirName))
                     {
-                        profile.CurrentSkinDirectoryName = selectedSkinDirName; // Update profile
+                        profile.CurrentSkinDirectoryName = selectedSkinDirName;
                         applySkinCallback?.Invoke(skinManager.CurrentSkin);
-                        // No MarkDirty() here as skin changes are applied immediately and saved via CurrentSkinDirectoryName
-                        // Rebuild controls might be needed if panel's own appearance depended on skin.
-                        // For now, AppWindow.ApplySkin handles necessary updates.
                         Console.WriteLine($"SettingsPanel: Skin selected '{selectedSkinDirName}'");
                     }
                 }
             );
             controls.Add(skinSelector);
-            currentY += spacingY * 1.5f; // Extra space after skin selector
+            // SkinSelector's label is at currentY, its box is below. So advance currentY past the whole control.
+            // Approximate height of SkinSelector: Label_Height + Box_Height + small_gap.
+            // Assuming label height is approx controlItemHeight/2 or similar.
+            currentY += (controlItemHeight / panelSize.Y) * 2.0f + sectionBottomMargin;
 
-            // Basic Profile Settings (these are general, not skin-specific)
+
+            // Basic Profile Settings
             CreateToggle("Fading (Profile)", col1X, currentY, () => { profile.Fading = !profile.Fading; MarkDirty(); }, () => profile.Fading);
             CreateToggle("Counter", col2X, currentY, () => { profile.Counter = !profile.Counter; MarkDirty(); }, () => profile.Counter);
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateSlider("Bar Speed", col1X, currentY, 100, 2000, () => profile.BarSpeed, v => { profile.BarSpeed = v; MarkDirty(); });
             CreateSlider("Key Size", col2X, currentY, 20, 200, () => profile.KeySize, v => { profile.KeySize = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateSlider("Margin", col1X, currentY, 0, 100, () => profile.Margin, v => { profile.Margin = v; MarkDirty(); });
             CreateSlider("Outline", col2X, currentY, 0, 20, () => profile.OutlineThickness, v => { profile.OutlineThickness = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateSlider("FPS", col1X, currentY, 15, 240, () => profile.FPS, v => { profile.FPS = v; MarkDirty(); });
             CreateSlider("Bar Height", col2X, currentY, 100, 1000, () => profile.BarHeight, v => { profile.BarHeight = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += sectionBottomMargin;
 
             // Effect Settings
             CreateToggle("Glitch Bars", col1X, currentY, () => { profile.EnableGlitch = !profile.EnableGlitch; MarkDirty(); }, () => profile.EnableGlitch);
             CreateSlider("Glitch Freq", col2X, currentY, 1, 20, () => profile.GlitchFrequency, v => { profile.GlitchFrequency = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateToggle("Pixelation", col1X, currentY, () => { profile.EnablePixelation = !profile.EnablePixelation; MarkDirty(); }, () => profile.EnablePixelation);
             CreateSlider("Pixel Size", col2X, currentY, 1, 32, () => profile.PixelSize, v => { profile.PixelSize = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateToggle("Tap Effects", col1X, currentY, () => { profile.EnableTapEffects = !profile.EnableTapEffects; MarkDirty(); }, () => profile.EnableTapEffects);
             CreateToggle("Bar Effects", col2X, currentY, () => { profile.EnableBarEffects = !profile.EnableBarEffects; MarkDirty(); }, () => profile.EnableBarEffects);
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateToggle("Key Glow", col1X, currentY, () => { profile.EnableKeyGlow = !profile.EnableKeyGlow; MarkDirty(); }, () => profile.EnableKeyGlow);
             CreateSlider("Glow Intensity", col2X, currentY, 0, 100, () => profile.GlowIntensity, v => { profile.GlowIntensity = v; MarkDirty(); });
-            currentY += spacingY;
+            currentY += verticalRowSpacing;
 
             CreateToggle("Audio Reactive", col1X, currentY, () => { profile.AudioReactive = !profile.AudioReactive; MarkDirty(); }, () => profile.AudioReactive);
-            CreateSlider("Bar Speed Mult", col2X, currentY, 0, 3, () => (int)(profile.BarSpeedMultiplier * 100), v => { profile.BarSpeedMultiplier = v / 100f; MarkDirty(); });
-            currentY += spacingY;
+            CreateSlider("Bar Speed Mult", col2X, currentY, 0, 300, () => (int)(profile.BarSpeedMultiplier * 100), v => { profile.BarSpeedMultiplier = v / 100f; MarkDirty(); });
+            currentY += sectionBottomMargin;
 
             // Tap Effect Settings
             CreateSlider("Tap Duration", col1X, currentY, 1, 20, () => (int)(profile.TapEffectDuration * 10), v => { profile.TapEffectDuration = v / 10f; MarkDirty(); });
             CreateSlider("Tap Scale", col2X, currentY, 5, 30, () => (int)(profile.TapEffectScale * 10), v => { profile.TapEffectScale = v / 10f; MarkDirty(); });
-            currentY += spacingY;
+            currentY += sectionBottomMargin;
 
-            // Color Settings (simplified for now)
-            CreatePlaceHolder("BG Color", col1X, currentY, () => profile.BackgroundColor, c => { if(c is SFML.Graphics.Color) profile.BackgroundColor = (SFML.Graphics.Color)c; MarkDirty(); });
-            CreatePlaceHolder("Glitch Color", col2X, currentY, () => profile.GlitchColor, c => { if(c is SFML.Graphics.Color) profile.GlitchColor = (SFML.Graphics.Color)c; MarkDirty(); });
-            currentY += spacingY;
-
-            CreatePlaceHolder("Tap Effect Color", col1X, currentY, () => profile.TapEffectColor, c => { if(c is SFML.Graphics.Color) profile.TapEffectColor = (SFML.Graphics.Color)c; MarkDirty(); });
-            CreatePlaceHolder("Tap Shape", col2X, currentY, () => profile.TapShape, s => { if(s is string) profile.TapShape = (string)s; MarkDirty(); });
-            currentY += spacingY * 1.5f; // Extra space before buttons
+            // Placeholder Color Settings are removed as they are not functional and clutter the UI
+            // If actual color pickers were implemented, they would go here.
 
             // Save Button for general profile settings
-            saveButton = CreateButton("Save Profile Settings", col1X, currentY, () => {
+            // Position it explicitly at the bottom, spanning the width
+            float saveButtonHeight = 35f;
+            float saveButtonY = 1.0f - outerMargin - (saveButtonHeight / panelSize.Y);
+            saveButton = CreateButton("Save Profile Settings", col1X, saveButtonY, new Vector2f(panelSize.X * (1.0f - 2 * outerMargin), saveButtonHeight), () => {
                 profile.Save("profile.json");
                 isDirty = false;
                 UpdateSaveLabel();
@@ -616,12 +733,12 @@ namespace KeyOverlayEnhanced
 
         private void CreateToggle(string label, float xPercent, float yPercent, Action onToggle, Func<bool> getter)
         {
-            controls.Add(new ToggleControl(label, GetRelativePos(xPercent, yPercent), font, onToggle, getter));
+            controls.Add(new ToggleControl(label, GetRelativePos(xPercent, yPercent), font, skinManager.CurrentSkin, onToggle, getter));
         }
 
         private void CreateSlider(string label, float xPercent, float yPercent, int min, int max, Func<int> getter, Action<int> setter)
         {
-            controls.Add(new SliderControl(label, GetRelativePos(xPercent, yPercent), min, max, font, getter, setter));
+            controls.Add(new SliderControl(label, GetRelativePos(xPercent, yPercent), min, max, font, skinManager.CurrentSkin, getter, setter));
         }
 
         // Placeholder for actual ColorPicker and ShapePicker creation
@@ -646,6 +763,7 @@ namespace KeyOverlayEnhanced
 
         private ButtonControl CreateButton(string text, float xPercent, float yPercent, Action onClick)
         {
+            // This overload is now correctly passing skinManager.CurrentSkin
             var button = new ButtonControl(text, GetRelativePos(xPercent, yPercent), new Vector2f(panelSize.X * 0.4f, 30), font, onClick);
             controls.Add(button);
             return button;
