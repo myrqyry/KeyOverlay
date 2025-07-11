@@ -1,0 +1,16 @@
+{
+  "SkinName": "Default Dark",
+  "Author": "JulesAI",
+  "Description": "A familiar dark theme.",
+  "FontFileName": "Resources/consolab.ttf",
+  "KeyShape": "Rectangle",
+  "BackgroundColor": { "R": 20, "G": 20, "B": 20, "A": 255 },
+  "KeyDefaultColor": { "R": 50, "G": 50, "B": 50, "A": 255 },
+  "KeyPressedColor": { "R": 150, "G": 150, "B": 150, "A": 255 },
+  "KeyOutlineColor": { "R": 220, "G": 220, "B": 220, "A": 255 },
+  "KeyLabelColor": { "R": 255, "G": 255, "B": 255, "A": 255 },
+  "CounterColor": { "R": 0, "G": 200, "B": 200, "A": 255 },
+  "TapEffectColor": { "R": 255, "G": 255, "B": 255, "A": 200 },
+  "TapEffectShape": "Circle",
+  "GlitchColor": { "R": 255, "G": 0, "B": 0, "A": 150 }
+}

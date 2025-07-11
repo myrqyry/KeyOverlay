@@ -1,0 +1,16 @@
+{
+  "SkinName": "Default Light",
+  "Author": "JulesAI",
+  "Description": "A clean light theme.",
+  "FontFileName": "Resources/consolab.ttf", // Assuming skins share the main font for now
+  "KeyShape": "Rectangle",
+  "BackgroundColor": { "R": 230, "G": 230, "B": 230, "A": 255 },
+  "KeyDefaultColor": { "R": 200, "G": 200, "B": 200, "A": 255 },
+  "KeyPressedColor": { "R": 100, "G": 100, "B": 100, "A": 255 },
+  "KeyOutlineColor": { "R": 30, "G": 30, "B": 30, "A": 255 },
+  "KeyLabelColor": { "R": 10, "G": 10, "B": 10, "A": 255 },
+  "CounterColor": { "R": 0, "G": 100, "B": 200, "A": 255 },
+  "TapEffectColor": { "R": 50, "G": 50, "B": 50, "A": 200 },
+  "TapEffectShape": "Square", // Changed for variety
+  "GlitchColor": { "R": 80, "G": 80, "B": 255, "A": 150 }
+}

@@ -1,0 +1,40 @@
+{
+  "SkinName": "Catppuccin Mocha",
+  "Author": "Catppuccin Org / JulesAI",
+  "Description": "A warm, soothing dark theme for the KeyOverlay.",
+  "FontFileName": "Resources/consolab.ttf",
+  "KeyShape": "Rectangle",
+
+  "KeyEnableAnimation": true,
+  "KeyAnimationDurationPress": 0.12,
+  "KeyAnimationDurationRelease": 0.20,
+  "KeyTargetScalePress": 1.1,
+  "KeyEasingFunctionPress": "EaseOutCubic",
+  "KeyEasingFunctionRelease": "EaseOutCubic",
+
+  "BackgroundColor": { "R": 30, "G": 30, "B": 46, "A": 255 },     mantuvo (Base)
+  "KeyDefaultColor": { "R": 49, "G": 50, "B": 68, "A": 255 },    manteau (Surface0)
+  "KeyPressedColor": { "R": 203, "G": 166, "B": 247, "A": 255 },  manteau (Mauve)
+  "KeyOutlineColor": { "R": 108, "G": 112, "B": 134, "A": 255 },  manteau (Overlay0)
+  "KeyLabelColor": { "R": 205, "G": 214, "B": 244, "A": 255 },    manteau (Text)
+  "CounterColor": { "R": 137, "G": 220, "B": 235, "A": 255 },     manteau (Sky)
+  "GlitchColor": { "R": 243, "G": 139, "B": 168, "A": 180 },      manteau (Red, semi-transparent)
+
+  "TapEffectColor": { "R": 180, "G": 190, "B": 254, "A": 200 },   manteau (Lavender, semi-transparent)
+  "TapEffectShape": "Circle",
+
+  "PanelBackgroundColor": { "R": 24, "G": 24, "B": 37, "A": 245 },  manteau (Mantle, slightly transparent)
+  "PanelTextColor": { "R": 205, "G": 214, "B": 244, "A": 255 },      manteau (Text)
+  "PanelHeaderTextColor": { "R": 203, "G": 166, "B": 247, "A": 255 },manteau (Mauve)
+
+  "ControlBackgroundColor": { "R": 30, "G": 30, "B": 46, "A": 255 },  manteau (Base)
+  "ControlOutlineColor": { "R": 69, "G": 71, "B": 90, "A": 255 },   manteau (Surface1)
+  "ControlTextColor": { "R": 186, "G": 194, "B": 222, "A": 255 },    manteau (Subtext1)
+  "ControlAccentColor": { "R": 137, "G": 180, "B": 250, "A": 255 },  manteau (Blue)
+
+  "ButtonBackgroundColor": { "R": 49, "G": 50, "B": 68, "A": 255 },  manteau (Surface0)
+  "ButtonTextColor": { "R": 205, "G": 214, "B": 244, "A": 255 },      manteau (Text)
+  "ButtonHoverBackgroundColor": { "R": 69, "G": 71, "B": 90, "A": 255 },manteau (Surface1)
+
+  "DirtyIndicatorColor": { "R": 243, "G": 139, "B": 168, "A": 255 }  manteau (Red)
+}

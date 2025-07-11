@@ -11,36 +11,42 @@ namespace KeyOverlayEnhanced
     {
         public Shape Shape { get; private set; }
         private Clock lifetime;
-        private float maxLifetime = 0.5f; // seconds
-        private Color startColor = Color.White;
-        private Color endColor = new Color(Color.White.R, Color.White.G, Color.White.B, 0);
-        private float scale = 1.0f;
+        private float maxLifetime = 0.5f; // seconds, can be overridden by profile
+        private Color startColor;
+        private Color endColor;
+        private float initialScale = 1.0f; // Used for animation based on profile setting
 
-        public TapEffect(Vector2f center, string shapeType, Profile profile)
+        // Constructor now takes SkinProfile for color/shape and Profile for general settings like KeySize
+        public TapEffect(Vector2f center, string shapeTypeFromSkin, Profile generalProfile, SkinProfile skinProfile)
         {
             lifetime = new Clock();
-            float keySize = profile.KeySize / 2f; // Example size
+            // Size of the tap effect could be based on KeySize or a new SkinProfile property
+            float effectVisualSize = generalProfile.KeySize / 2f; // Example size, could be skin-dependent
 
-            if (shapeType.Equals("Circle", StringComparison.OrdinalIgnoreCase))
+            this.startColor = skinProfile.TapEffectColor.SfmlColor;
+            this.endColor = new Color(startColor.R, startColor.G, startColor.B, 0); // Fade to transparent
+
+            if (shapeTypeFromSkin.Equals("Circle", StringComparison.OrdinalIgnoreCase))
             {
-                var circle = new CircleShape(keySize / 2) // Radius
+                var circle = new CircleShape(effectVisualSize / 2) // Radius
                 {
-                    Origin = new Vector2f(keySize/2, keySize/2),
+                    Origin = new Vector2f(effectVisualSize/2, effectVisualSize/2),
                     Position = center,
-                    FillColor = startColor
+                    FillColor = this.startColor
                 };
                 Shape = circle;
             }
             else // Default to Rectangle / Square
             {
-                var rect = new RectangleShape(new Vector2f(keySize, keySize))
+                var rect = new RectangleShape(new Vector2f(effectVisualSize, effectVisualSize))
                 {
-                    Origin = new Vector2f(keySize/2, keySize/2),
+                    Origin = new Vector2f(effectVisualSize/2, effectVisualSize/2),
                     Position = center,
-                    FillColor = startColor
+                    FillColor = this.startColor
                 };
                 Shape = rect;
             }
+            // SetScale and SetDuration will be called externally using generalProfile settings
         }
 
         public void SetDuration(float duration)
@@ -48,18 +54,14 @@ namespace KeyOverlayEnhanced
             maxLifetime = duration;
         }
 
-        public void SetScale(float newScale)
+        public void SetScale(float newInitialScale) // This scale is the target scale for animation
         {
-            scale = newScale;
+            this.initialScale = newInitialScale; // Store the profile's desired max scale for the pop effect
+            if(Shape != null) Shape.Scale = new Vector2f(1f,1f); // Start at normal size
         }
 
-        public void SetColor(Color color)
-        {
-            startColor = color;
-            endColor = new Color(color.R, color.G, color.B, 0);
-            if (Shape != null)
-                Shape.FillColor = startColor;
-        }
+        // SetColor is now handled by constructor using SkinProfile.TapEffectColor
+        // public void SetColor(Color color) { ... }
 
         public bool Update() // Returns false if dead
         {
@@ -73,9 +75,23 @@ namespace KeyOverlayEnhanced
             byte a = (byte)(startColor.A * (1 - ratio) + endColor.A * ratio);
             Shape.FillColor = new Color(r,g,b,a);
 
-            // Optional: Add scaling or other animations
-            float currentScale = 1.0f + ratio * (scale - 1.0f); // Scale based on profile setting
-            Shape.Scale = new Vector2f(currentScale,currentScale);
+            // Animate scale: grow to 'initialScale' then shrink back.
+            // This is a simple grow then hold, then fade. A bounce would be more complex.
+            // For a pop effect: scale up quickly, then fade out.
+            // Let's try scaling up to 'initialScale' over the first half of life, then just fade.
+            float scaleRatio = Math.Min(1f, (elapsed / (maxLifetime / 2f))); // Reach max scale at half life
+            float currentAnimatedScale = 1.0f + scaleRatio * (initialScale - 1.0f);
+
+            // If we want it to shrink after reaching peak:
+            // float peakTime = maxLifetime * 0.3f; // Time to reach peak scale
+            // if (elapsed < peakTime) {
+            //     currentAnimatedScale = 1.0f + (elapsed / peakTime) * (initialScale - 1.0f);
+            // } else {
+            //     currentAnimatedScale = initialScale - ((elapsed - peakTime) / (maxLifetime - peakTime)) * (initialScale - 1.0f);
+            //     currentAnimatedScale = Math.Max(0.1f, currentAnimatedScale); // Don't shrink to zero scale
+            // }
+
+            Shape.Scale = new Vector2f(currentAnimatedScale, currentAnimatedScale);
 
             return true;
         }
@@ -87,65 +103,199 @@ namespace KeyOverlayEnhanced
         public Keyboard.Key SfmlKey { get; }
         public Mouse.Button MouseButton { get; }
         public bool IsMouseKey { get; }
-        public RectangleShape VisualKeyShape { get; set; } // The visual representation of the key background
+        public RectangleShape VisualKeyShape { get; set; }
         public Text KeyLabel { get; set; }
-        public Color DefaultColor { get; set; } = new Color(50,50,50);
-        public Color PressedColor { get; set; } = new Color(150,150,150);
+        // Colors are now derived from SkinProfile
+        private Color currentDefaultColor;
+        private Color currentPressedColor;
         public bool IsPressed { get; private set; }
         public int PressCount { get; private set; }
+        private SkinProfile skin; // Keep a reference to apply styles
+
+        // Animation state properties
+        private bool isAnimatingPress = false;
+        private bool isAnimatingRelease = false;
+        private Clock animationClock = new Clock(); // For timing animations
+
+        // These will be configurable later via SkinProfile, using defaults for now
+        private float currentConfiguredAnimationDurationPress = 0.15f;
+        private float currentConfiguredAnimationDurationRelease = 0.25f;
+        private float currentConfiguredTargetScalePress = 1.15f;
+        // private string currentEasingFunctionType = "EaseOutCubic"; // Obsolete: now using skin.KeyEasingFunctionPress/Release
+
+        private float currentScale = 1.0f;
+        private float animationStartScale = 1.0f; // Stores the scale at the beginning of an animation
+        private Vector2f keyOriginalTopLeftPosition; // Store the initial top-left position for label calculation
+
 
         // For standard keys
-        public KeyDefinition(Keyboard.Key key, Vector2f position, Vector2f size, string label, Font font, Profile profile)
+        public KeyDefinition(Keyboard.Key key, Vector2f topLeftPosition, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
         {
             SfmlKey = key;
             IsMouseKey = false;
+            this.skin = skinProfile;
+            this.keyOriginalTopLeftPosition = topLeftPosition;
+
+            currentDefaultColor = skin.KeyDefaultColor.SfmlColor;
+            currentPressedColor = skin.KeyPressedColor.SfmlColor;
+
             VisualKeyShape = new RectangleShape(size) {
-                Position = position,
-                FillColor = DefaultColor,
-                OutlineColor = Color.White,
-                OutlineThickness = profile.OutlineThickness
+                Origin = new Vector2f(size.X / 2f, size.Y / 2f),
+                Position = new Vector2f(topLeftPosition.X + size.X / 2f, topLeftPosition.Y + size.Y / 2f),
+                FillColor = currentDefaultColor,
+                OutlineColor = skin.KeyOutlineColor.SfmlColor,
+                OutlineThickness = generalProfile.OutlineThickness
             };
-            KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = Color.White };
-            KeyLabel.Position = new Vector2f(
-                position.X + (size.X - KeyLabel.GetGlobalBounds().Width) / 2,
-                position.Y + (size.Y - KeyLabel.GetGlobalBounds().Height) / 2 - KeyLabel.GetLocalBounds().Top /2
-            );
+            KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = skin.KeyLabelColor.SfmlColor };
+            UpdateLabelPosition();
         }
 
-        // For mouse buttons (simplified)
-        public KeyDefinition(Mouse.Button button, Vector2f position, Vector2f size, string label, Font font, Profile profile)
+        // For mouse buttons
+        public KeyDefinition(Mouse.Button button, Vector2f topLeftPosition, Vector2f size, string label, Font font, Profile generalProfile, SkinProfile skinProfile)
         {
             MouseButton = button;
             IsMouseKey = true;
+            this.skin = skinProfile;
+            this.keyOriginalTopLeftPosition = topLeftPosition;
+
+            currentDefaultColor = skin.KeyDefaultColor.SfmlColor;
+            currentPressedColor = skin.KeyPressedColor.SfmlColor;
+
             VisualKeyShape = new RectangleShape(size) {
-                Position = position,
-                FillColor = DefaultColor,
-                OutlineColor = Color.White,
-                OutlineThickness = profile.OutlineThickness
+                Origin = new Vector2f(size.X / 2f, size.Y / 2f),
+                Position = new Vector2f(topLeftPosition.X + size.X / 2f, topLeftPosition.Y + size.Y / 2f),
+                FillColor = currentDefaultColor,
+                OutlineColor = skin.KeyOutlineColor.SfmlColor,
+                OutlineThickness = generalProfile.OutlineThickness
             };
-            KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = Color.White };
-             KeyLabel.Position = new Vector2f(
-                position.X + (size.X - KeyLabel.GetGlobalBounds().Width) / 2,
-                position.Y + (size.Y - KeyLabel.GetGlobalBounds().Height) / 2 - KeyLabel.GetLocalBounds().Top /2
+            KeyLabel = new Text(label, font, (uint)(size.Y * 0.6f)) { FillColor = skin.KeyLabelColor.SfmlColor };
+            UpdateLabelPosition();
+        }
+
+        private void UpdateLabelPosition()
+        {
+            // Recalculate apparent top-left based on original top-left, size, and current scale.
+            // This is simpler than using GetGlobalBounds() if the parent doesn't transform.
+            float visualWidth = VisualKeyShape.Size.X * currentScale;
+            float visualHeight = VisualKeyShape.Size.Y * currentScale;
+            float apparentTopLeftX = keyOriginalTopLeftPosition.X + (VisualKeyShape.Size.X - visualWidth) / 2f;
+            float apparentTopLeftY = keyOriginalTopLeftPosition.Y + (VisualKeyShape.Size.Y - visualHeight) / 2f;
+
+            KeyLabel.Position = new Vector2f(
+                apparentTopLeftX + (visualWidth - KeyLabel.GetGlobalBounds().Width) / 2f,
+                apparentTopLeftY + (visualHeight - KeyLabel.GetGlobalBounds().Height) / 2f - KeyLabel.GetLocalBounds().Top
             );
         }
 
-        public void UpdateState(bool justPressed)
+        public void UpdateSkin(SkinProfile newSkin, Font newFont, Profile generalProfile)
         {
-             bool currentlyPressed = IsMouseKey ? Mouse.IsButtonPressed(MouseButton) : Keyboard.IsKeyPressed(SfmlKey);
-            if (currentlyPressed)
+            this.skin = newSkin;
+            currentDefaultColor = skin.KeyDefaultColor.SfmlColor;
+            currentPressedColor = skin.KeyPressedColor.SfmlColor;
+
+            VisualKeyShape.OutlineColor = skin.KeyOutlineColor.SfmlColor;
+            VisualKeyShape.OutlineThickness = generalProfile.OutlineThickness;
+
+            KeyLabel.Font = newFont;
+            KeyLabel.FillColor = skin.KeyLabelColor.SfmlColor;
+            // VisualKeyShape.Position needs to be reset to its centered position if not already
+            VisualKeyShape.Position = new Vector2f(keyOriginalTopLeftPosition.X + VisualKeyShape.Size.X / 2f, keyOriginalTopLeftPosition.Y + VisualKeyShape.Size.Y / 2f);
+            VisualKeyShape.Origin = new Vector2f(VisualKeyShape.Size.X / 2f, VisualKeyShape.Size.Y / 2f);
+            UpdateLabelPosition(); // Recalculate label based on new font/skin
+
+            VisualKeyShape.FillColor = IsPressed ? currentPressedColor : currentDefaultColor;
+
+            // Update animation parameters from the new skin
+            this.currentConfiguredAnimationDurationPress = newSkin.KeyAnimationDurationPress;
+            this.currentConfiguredAnimationDurationRelease = newSkin.KeyAnimationDurationRelease;
+            this.currentConfiguredTargetScalePress = newSkin.KeyTargetScalePress;
+            // currentEasingFunctionType is now split into press and release, will be used directly from skin property.
+        }
+
+        private void UpdateAnimation()
+        {
+            if (!skin.KeyEnableAnimation) // Check if animation is enabled for the current skin
             {
-                VisualKeyShape.FillColor = PressedColor;
-                if (justPressed && !IsPressed) // Check if it was a new press
+                currentScale = IsPressed ? currentConfiguredTargetScalePress : 1.0f;
+                VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+                UpdateLabelPosition();
+                isAnimatingPress = false; // Ensure animation flags are false
+                isAnimatingRelease = false;
+                return;
+            }
+
+            float elapsed = animationClock.ElapsedTime.AsSeconds();
+            float t = 0f;
+
+            if (isAnimatingPress)
+            {
+                t = Math.Min(1f, elapsed / currentConfiguredAnimationDurationPress);
+                float easedT = EasingFunctions.ApplyEasing(skin.KeyEasingFunctionPress, t); // Use press easing func
+                currentScale = animationStartScale + (currentConfiguredTargetScalePress - animationStartScale) * easedT;
+
+                if (t >= 1f)
                 {
-                    PressCount++;
+                    isAnimatingPress = false;
+                    currentScale = currentConfiguredTargetScalePress;
                 }
             }
-            else
+            else if (isAnimatingRelease)
             {
-                VisualKeyShape.FillColor = DefaultColor;
+                t = Math.Min(1f, elapsed / currentConfiguredAnimationDurationRelease);
+                float easedT = EasingFunctions.ApplyEasing(skin.KeyEasingFunctionRelease, t); // Use release easing func
+                currentScale = animationStartScale + (1.0f - animationStartScale) * easedT;
+
+                if (t >= 1f)
+                {
+                    isAnimatingRelease = false;
+                    currentScale = 1.0f; // Snap to final scale
+                }
             }
-            IsPressed = currentlyPressed;
+            // Origin is already set to center in constructor. Position is also set to center.
+            // Only scale needs to be applied here.
+            VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            UpdateLabelPosition(); // Update label position based on new scale
+        }
+
+
+        public void UpdateState(bool justPressed)
+        {
+            bool previouslyPressed = IsPressed;
+            IsPressed = IsMouseKey ? Mouse.IsButtonPressed(MouseButton) : Keyboard.IsKeyPressed(SfmlKey);
+
+            UpdateAnimation(); // Handle ongoing or finishing animations
+
+            if (IsPressed && !previouslyPressed) // Key down event
+            {
+                VisualKeyShape.FillColor = currentPressedColor;
+                PressCount++;
+
+                animationStartScale = currentScale; // Capture current scale for animation base
+                isAnimatingPress = true;
+                isAnimatingRelease = false;
+                animationClock.Restart();
+            }
+            else if (!IsPressed && previouslyPressed) // Key up event
+            {
+                VisualKeyShape.FillColor = currentDefaultColor;
+
+                animationStartScale = currentScale; // Capture current scale for animation base
+                isAnimatingRelease = true;
+                isAnimatingPress = false;
+                animationClock.Restart();
+            }
+            else if (!IsPressed && !isAnimatingRelease) // Not pressed, not animating release (steady state)
+            {
+                 VisualKeyShape.FillColor = currentDefaultColor;
+                 currentScale = 1.0f; // Ensure it's reset if no animation is running
+                 VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            }
+             else if (IsPressed && !isAnimatingPress) // Pressed, not animating press (steady state)
+            {
+                VisualKeyShape.FillColor = currentPressedColor;
+                currentScale = currentConfiguredTargetScalePress; // Stay scaled while pressed
+                VisualKeyShape.Scale = new Vector2f(currentScale, currentScale);
+            }
         }
 
         public bool CheckJustPressed()
@@ -165,10 +315,10 @@ namespace KeyOverlayEnhanced
             if(counterEnabled)
             {
                 // Simplified counter display on the key itself
-                Text countText = new Text(PressCount.ToString(), KeyLabel.Font, 12)
+                Text countText = new Text(PressCount.ToString(), KeyLabel.Font, 12) // Font size for counter could be skinable
                 {
-                    FillColor = Color.Cyan,
-                    Position = new Vector2f(VisualKeyShape.Position.X + 5, VisualKeyShape.Position.Y + 5)
+                    FillColor = skin.CounterColor.SfmlColor, // Use CounterColor from SkinProfile
+                    Position = new Vector2f(VisualKeyShape.Position.X + 5, VisualKeyShape.Position.Y + 5) // Positioning could be more dynamic/skinnable
                 };
                 window.Draw(countText);
             }
@@ -178,9 +328,10 @@ namespace KeyOverlayEnhanced
 
     public class CustomUI
     {
-        private Profile profile;
-        private RenderWindow window; // For pixelation effect primarily
-        private AudioAnalyzer audioAnalyzer; // Needs to be passed in or instantiated
+        private Profile generalProfile; // General settings like FPS, global effect toggles
+        private SkinProfile currentSkin;  // Skin-specific settings like colors, fonts
+        private RenderWindow window;
+        private AudioAnalyzer audioAnalyzer;
         private Font uiFont;
 
         private Clock glitchClock = new Clock();
@@ -188,102 +339,125 @@ namespace KeyOverlayEnhanced
         private List<PixelationEffect> pixelEffects = new List<PixelationEffect>();
         private List<TapEffect> tapEffects = new List<TapEffect>();
 
-        // Key definitions will replace the old _keyList from AppWindow
         private Dictionary<string, KeyDefinition> keyMap = new Dictionary<string, KeyDefinition>();
 
-
-        public CustomUI(Profile profile, RenderWindow window, AudioAnalyzer audioAnalyzer, Font font)
+        public CustomUI(Profile generalProfile, SkinProfile initialSkin, RenderWindow window, AudioAnalyzer audioAnalyzer, Font font)
         {
-            this.profile = profile;
+            this.generalProfile = generalProfile;
+            this.currentSkin = initialSkin;
             this.window = window;
             this.audioAnalyzer = audioAnalyzer;
-            this.uiFont = font;
-            InitializeKeys(); // Setup key definitions based on profile or defaults
+            this.uiFont = font; // Initial font
+            InitializeKeys();
+        }
+
+        public void UpdateSkin(SkinProfile newSkin, Font newFont)
+        {
+            this.currentSkin = newSkin;
+            this.uiFont = newFont; // Update font
+            // Re-initialize keys or update their visual properties based on the new skin
+            RecalculateLayout(); // This already clears and re-initializes keys
+            // Update other skin-dependent elements if any
+            Console.WriteLine($"CustomUI skin updated to: {newSkin.SkinName}");
         }
 
         private void InitializeKeys()
         {
-            // Example key setup, this should be made configurable later, perhaps from Profile
-            // For now, using some common osu! standard mode keys + mouse buttons
-            // Positions and sizes are placeholders and need to be calculated based on profile.KeySize, profile.Margin etc.
+            if (uiFont == null)
+            {
+                Console.WriteLine("Cannot initialize keys in CustomUI: uiFont is null.");
+                return;
+            }
+            keyMap.Clear(); // Clear existing keys before re-initializing
 
-            float currentX = profile.Margin;
-            float keyY = window.Size.Y - profile.KeySize - profile.Margin; // Position keys at the bottom
-            float keySize = profile.KeySize;
+            // Key layout and sizing now primarily from generalProfile, colors from currentSkin.
+            // TODO: Consider moving KeySize, Margin to SkinProfile if they should be skin-dependent. For now, they are global.
+            float currentX = generalProfile.Margin;
+            // Ensure window reference is valid and window has non-zero size for Y calculation.
+            float keyY = (window != null && window.Size.Y > 0) ? window.Size.Y - generalProfile.KeySize - generalProfile.Margin : 100; // Fallback Y
+            keyY = Math.Max(0, keyY); // Ensure keyY is not negative if window is too small
 
-            // This is a very basic layout. A more robust system would read keybinds from profile/config
-            AddKey("D", Keyboard.Key.D, currentX, keyY, keySize, profile.Key1Color);
-            currentX += keySize + profile.Margin;
-            AddKey("F", Keyboard.Key.F, currentX, keyY, keySize, profile.Key2Color);
-            currentX += keySize + profile.Margin;
-            AddKey("J", Keyboard.Key.J, currentX, keyY, keySize, profile.Key3Color);
-            currentX += keySize + profile.Margin;
-            AddKey("K", Keyboard.Key.K, currentX, keyY, keySize, profile.Key4Color);
-            currentX += keySize + profile.Margin;
+            float keySize = generalProfile.KeySize;
+
+            // This is a very basic layout. A more robust system would read keybinds from generalProfile/config
+            // The specific colors like Key1Color, Key2Color from generalProfile are now OBSOLETE.
+            // KeyDefinition will use currentSkin.KeyDefaultColor, currentSkin.KeyPressedColor etc.
+            AddKey("D", Keyboard.Key.D, currentX, keyY, keySize);
+            currentX += keySize + generalProfile.Margin;
+            AddKey("F", Keyboard.Key.F, currentX, keyY, keySize);
+            currentX += keySize + generalProfile.Margin;
+            AddKey("J", Keyboard.Key.J, currentX, keyY, keySize);
+            currentX += keySize + generalProfile.Margin;
+            AddKey("K", Keyboard.Key.K, currentX, keyY, keySize);
+            currentX += keySize + generalProfile.Margin;
 
             // Example Mouse Buttons
-            AddKey("M1", Mouse.Button.Left, currentX, keyY, keySize, profile.Key5Color);
-            currentX += keySize + profile.Margin;
-            AddKey("M2", Mouse.Button.Right, currentX, keyY, keySize, profile.Key6Color);
+            AddKey("M1", Mouse.Button.Left, currentX, keyY, keySize);
+            currentX += keySize + generalProfile.Margin;
+            AddKey("M2", Mouse.Button.Right, currentX, keyY, keySize);
         }
 
-        private void AddKey(string name, Keyboard.Key sfmlKey, float x, float y, float size, Color color)
+        // Removed Color parameter, as KeyDefinition will get its colors from the SkinProfile
+        private void AddKey(string name, Keyboard.Key sfmlKey, float x, float y, float size)
         {
-            var keyDef = new KeyDefinition(sfmlKey, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
-            keyDef.DefaultColor = color;
-            keyDef.PressedColor = new Color((byte)(color.R + 50), (byte)(color.G + 50), (byte)(color.B + 50), color.A);
+            if (uiFont == null) return; // Guard against null font
+            var keyDef = new KeyDefinition(sfmlKey, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, generalProfile, currentSkin);
+            // Specific key coloring (e.g. Key1Color) from the old profile is not directly used here anymore.
+            // The skin provides KeyDefaultColor, KeyPressedColor, etc.
+            // If per-key custom colors within a skin are needed later, SkinProfile and KeyDefinition would need expansion.
             keyMap[name] = keyDef;
         }
-        private void AddKey(string name, Mouse.Button mouseButton, float x, float y, float size, Color color)
+
+        private void AddKey(string name, Mouse.Button mouseButton, float x, float y, float size)
         {
-            var keyDef = new KeyDefinition(mouseButton, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, profile);
-            keyDef.DefaultColor = color;
-            keyDef.PressedColor = new Color((byte)(color.R + 50), (byte)(color.G + 50), (byte)(color.B + 50), color.A);
+            if (uiFont == null) return; // Guard against null font
+            var keyDef = new KeyDefinition(mouseButton, new Vector2f(x,y), new Vector2f(size,size), name, uiFont, generalProfile, currentSkin);
             keyMap[name] = keyDef;
         }
 
 
         public void Update()
         {
-            bool beatDetected = profile.AudioReactive ? audioAnalyzer.OnBeat() : true;
+            // Use generalProfile for global effect toggles and skin for effect details
+            bool beatDetected = generalProfile.AudioReactive ? audioAnalyzer.OnBeat() : true;
 
             foreach (var kvp in keyMap)
             {
                 var keyDef = kvp.Value;
-                bool isJustPressed = keyDef.CheckJustPressed(); // Check before updating state
-                keyDef.UpdateState(isJustPressed); // Update visual state (fill color)
+                bool isJustPressed = keyDef.CheckJustPressed();
+                keyDef.UpdateState(isJustPressed);
 
-                if (isJustPressed && (beatDetected || !profile.AudioReactive))
+                if (isJustPressed && (beatDetected || !generalProfile.AudioReactive))
                 {
-                    if (profile.EnableTapEffects)
+                    if (generalProfile.EnableTapEffects)
                     {
                         var center = new Vector2f(
                             keyDef.VisualKeyShape.Position.X + keyDef.VisualKeyShape.Size.X / 2,
                             keyDef.VisualKeyShape.Position.Y + keyDef.VisualKeyShape.Size.Y / 2
                         );
-                        var tapEffect = new TapEffect(center, profile.TapShape, profile);
-                        tapEffect.SetDuration(profile.TapEffectDuration);
-                        tapEffect.SetScale(profile.TapEffectScale);
-                        tapEffect.SetColor(profile.TapEffectColor);
+                        // TapEffect now takes SkinProfile to get its color/shape
+                        var tapEffect = new TapEffect(center, currentSkin.TapEffectShape, generalProfile, currentSkin);
+                        tapEffect.SetDuration(generalProfile.TapEffectDuration); // Duration from general profile
+                        tapEffect.SetScale(generalProfile.TapEffectScale);       // Scale from general profile
+                        // Color is set within TapEffect constructor from currentSkin
                         tapEffects.Add(tapEffect);
                     }
 
-                    if (profile.EnableGlitch && glitchClock.ElapsedTime.AsSeconds() >= 1f / Math.Max(1,profile.GlitchFrequency))
+                    if (generalProfile.EnableGlitch && glitchClock.ElapsedTime.AsSeconds() >= 1f / Math.Max(1, generalProfile.GlitchFrequency))
                     {
-                        // GlitchBar Y position can be randomized or fixed
                         float glitchY = (float)new Random().NextDouble() * window.Size.Y;
-                        glitchBars.Add(new GlitchBar((uint)window.Size.X, glitchY, profile));
+                        // GlitchBar now takes SkinProfile for color
+                        glitchBars.Add(new GlitchBar((uint)window.Size.X, glitchY, generalProfile, currentSkin));
                         glitchClock.Restart();
                     }
-                    if (profile.EnablePixelation)
+                    if (generalProfile.EnablePixelation)
                     {
-                        // Pixelation might be resource-intensive, consider limiting how often it's added
-                        pixelEffects.Add(new PixelationEffect(window, profile.PixelSize, profile));
+                        // PixelationEffect now takes SkinProfile (though not directly used for color yet)
+                        pixelEffects.Add(new PixelationEffect(window, generalProfile.PixelSize, generalProfile, currentSkin));
                     }
                 }
             }
 
-            // Update and remove dead effects
             tapEffects.RemoveAll(e => !e.Update());
             glitchBars.RemoveAll(g => !g.Update());
             pixelEffects.RemoveAll(p => !p.IsAlive());
@@ -291,33 +465,27 @@ namespace KeyOverlayEnhanced
 
         public void Render(RenderWindow targetWindow)
         {
-            // Draw keys first
             foreach (var kvp in keyMap)
             {
-                kvp.Value.Draw(targetWindow, profile.Counter);
+                kvp.Value.Draw(targetWindow, generalProfile.Counter); // Counter toggle from general profile
             }
 
-            // Then draw effects
             foreach (var e in tapEffects) targetWindow.Draw(e.Shape);
 
-            if (profile.EnableGlitch)
+            if (generalProfile.EnableGlitch)
             {
-                foreach (var g in glitchBars) g.Draw(targetWindow); // Assuming GlitchBar has a Draw method
+                foreach (var g in glitchBars) g.Draw(targetWindow);
             }
 
-            // Pixelation is applied as a post-processing step or draws over everything
-            // If PixelationEffect.Apply modifies the window content directly or uses shaders, its call might be different
-            if (profile.EnablePixelation)
+            if (generalProfile.EnablePixelation)
             {
                 foreach (var p in pixelEffects) p.Apply(targetWindow);
             }
         }
 
-        // Call this if window is resized or key layout settings change
         public void RecalculateLayout()
         {
-            // Clear existing keys and re-initialize based on new profile settings (KeySize, Margin etc)
-            keyMap.Clear();
+            // This will use the latest generalProfile, currentSkin, and uiFont
             InitializeKeys();
         }
     }
