@@ -362,12 +362,10 @@ namespace KeyOverlayEnhanced
             };
 
             selectedSkinText = new Text("", currentFont, 16) { FillColor = skin.ControlTextColor.SfmlColor };
-            // Center selectedSkinText
-            UpdateSelectedText(); // Call this to also set initial position correctly
 
             Bounds = new FloatRect(controlBasePosition, controlSize);
 
-            RefreshSkinList(); // This also calls UpdateSelectedText
+            RefreshSkinList(); // This calls UpdateItemButtons and UpdateSelectedText internally after skinNames is populated
         }
 
         public void UpdateSkin(SkinProfile newSkin, Font newFont)
